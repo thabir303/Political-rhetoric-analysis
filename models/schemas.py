@@ -48,6 +48,30 @@ class QueryResponse(BaseModel):
     processing_time: float = Field(0.0, description="Query processing time in seconds")
 
 
+class ScrapingRequest(BaseModel):
+    """Request model for scraping newspapers."""
+    start_date: str = Field(..., description="Start date in YYYY-MM-DD format", example="2024-08-05")
+    end_date: str = Field(..., description="End date in YYYY-MM-DD format", example="2024-09-05")
+    newspapers: Optional[List[str]] = Field(
+        default=["ProthomAlo", "Jugantor", "DailyStar", "DhakaTribune"],
+        description="List of newspapers to scrape"
+    )
+    enable_llm_analysis: Optional[bool] = Field(
+        default=False,
+        description="Enable LLM analysis (speech summaries and keywords). Warning: Very slow due to API rate limits!"
+    )
+
+
+class ScrapingResponse(BaseModel):
+    """Response model for scraping operation."""
+    status: str = Field(..., description="Status of scraping operation")
+    total_articles_scraped: int = Field(0, description="Total articles scraped")
+    total_articles_stored: int = Field(0, description="Total articles stored in database")
+    articles_by_source: Dict[str, int] = Field(default_factory=dict, description="Articles count by newspaper")
+    processing_time: float = Field(0.0, description="Total processing time in seconds")
+    message: str = Field("", description="Additional information")
+
+
 class HealthResponse(BaseModel):
     """Health check response."""
     status: str = Field(..., description="Service status")
@@ -67,3 +91,63 @@ class BulkArticleResponse(BaseModel):
     inserted_count: int = Field(0, description="Number of articles inserted")
     failed_count: int = Field(0, description="Number of failed insertions")
     article_ids: List[str] = Field(default_factory=list)
+
+
+# Political Figure and Party Models
+
+class PoliticalFigure(BaseModel):
+    """Model for a political figure."""
+    name: str = Field(..., description="Name of the political figure")
+    party: str = Field(..., description="Political party affiliation")
+    article_count: int = Field(0, description="Number of articles mentioning this figure")
+
+
+class PartyResponse(BaseModel):
+    """Response model for a political party."""
+    name: str = Field(..., description="Name of the political party")
+    figures: List[str] = Field(default_factory=list, description="List of popular figures in the party")
+    total_articles: int = Field(0, description="Total articles related to this party")
+
+
+class PartiesListResponse(BaseModel):
+    """Response model for list of parties."""
+    parties: List[PartyResponse] = Field(default_factory=list)
+    total_parties: int = Field(0, description="Total number of parties")
+
+
+class ArticleSummary(BaseModel):
+    """Summary of an article with LLM analysis."""
+    id: str = Field(..., description="Article ID")
+    title: str = Field(..., description="Article title")
+    date: str = Field(..., description="Publication date")
+    source: str = Field(..., description="Article source")
+    similarity: float = Field(..., description="Similarity score")
+    summary: Optional[str] = Field(None, description="LLM-generated summary")
+    key_points: List[str] = Field(default_factory=list, description="Key points from the article")
+    stance_analysis: Optional[str] = Field(None, description="Political stance analysis")
+    keywords: List[str] = Field(default_factory=list, description="Article keywords")
+    key_phrases: List[str] = Field(default_factory=list, description="Key phrases")
+    topics: List[str] = Field(default_factory=list, description="Main topics")
+    url: Optional[str] = Field(None, description="Article URL")
+
+
+class FigureProfileResponse(BaseModel):
+    """Response model for a political figure's profile."""
+    figure_name: str = Field(..., description="Name of the political figure")
+    party_name: str = Field(..., description="Political party")
+    total_articles: int = Field(0, description="Total articles found")
+    articles: List[ArticleSummary] = Field(default_factory=list, description="List of articles")
+    summaries_by_date: Dict[str, List[Dict[str, Any]]] = Field(
+        default_factory=dict,
+        description="Summaries organized by date for timeline views"
+    )
+
+
+class PartyFigureQueryRequest(BaseModel):
+    """Request model for querying by party/figure with date range."""
+    query: Optional[str] = Field("recent statements", description="Search query")
+    date_from: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
+    date_to: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
+    speeches_only: bool = Field(False, description="Filter for speeches only")
+    top_k: int = Field(10, description="Maximum number of results", ge=1, le=50)
+

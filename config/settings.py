@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Embedding Model
     embedding_model: str = "all-MiniLM-L6-v2"
     
+    # LLM/Groq Settings (optional)
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+    
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:8000"
     
@@ -35,6 +39,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "allow"  # Allow extra fields from .env
 
 
 # Global settings instance

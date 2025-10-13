@@ -8,6 +8,14 @@ from .schemas import (
     HealthResponse,
     BulkArticleCreate,
     BulkArticleResponse,
+    PartiesListResponse,
+    PartyResponse,
+    FigureProfileResponse,
+    ArticleSummary,
+    PartyFigureQueryRequest,
+    PoliticalFigure,
+    ScrapingRequest,
+    ScrapingResponse,
 )
 
 __all__ = [
@@ -19,4 +27,12 @@ __all__ = [
     "HealthResponse",
     "BulkArticleCreate",
     "BulkArticleResponse",
+    "PartiesListResponse",
+    "PartyResponse",
+    "FigureProfileResponse",
+    "ArticleSummary",
+    "PartyFigureQueryRequest",
+    "PoliticalFigure",
+    "ScrapingRequest",
+    "ScrapingResponse",
 ]

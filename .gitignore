@@ -22,15 +22,18 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.md
 
 # Environment
 .env
 .venv
-
+*.bin
 # ChromaDB
 chroma_db/
 *.db
-
+*.sqlite3
+test_*.py
+demo_*.py
 # IDE
 .vscode/
 .idea/

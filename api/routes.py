@@ -1,8 +1,8 @@
 """
 API route handlers for the RAG-IR application.
 """
-from fastapi import APIRouter, HTTPException, status
-from typing import List
+from fastapi import APIRouter, HTTPException, status, Query
+from typing import List, Optional
 import time
 import logging
 
@@ -14,14 +14,36 @@ from models import (
     HealthResponse,
     BulkArticleCreate,
     BulkArticleResponse,
+    PartiesListResponse,
+    PartyResponse,
+    FigureProfileResponse,
+    ArticleSummary,
+    PartyFigureQueryRequest,
+    PoliticalFigure,
+    ScrapingRequest,
+    ScrapingResponse,
 )
 from database import vector_store
 from config import settings
+
+# Import VectorDatabase for enhanced filtering
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from vector_db import VectorDatabase
 
 logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter()
+
+# Initialize enhanced vector database for political filtering
+try:
+    enhanced_db = VectorDatabase(collection_name="political_articles")
+    logger.info("Enhanced vector database initialized for political filtering")
+except Exception as e:
+    logger.warning(f"Could not initialize enhanced vector database: {e}")
+    enhanced_db = None
 
 
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
@@ -30,12 +52,22 @@ async def health_check():
     Health check endpoint to verify service status.
     """
     try:
-        stats = vector_store.get_collection_stats()
+        # Use enhanced_db (same database as scraping) to get accurate stats
+        if enhanced_db:
+            stats = enhanced_db.get_statistics()
+            total_articles = stats.get("total_articles", 0)
+            logger.info(f"Health check: enhanced_db reports {total_articles} articles")
+        else:
+            # Fallback to vector_store
+            stats = vector_store.get_collection_stats()
+            total_articles = stats["total_articles"]
+            logger.info(f"Health check: vector_store reports {total_articles} articles")
+        
         return HealthResponse(
             status="healthy",
             version=settings.app_version,
             database_connected=True,
-            total_articles=stats["total_articles"]
+            total_articles=total_articles
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -158,12 +190,29 @@ async def query_articles(query_request: QueryRequest):
             # For persons, we'll use a contains search
             filter_dict["persons"] = query_request.filter_persons
         
-        # Query vector store
-        ids, metadatas, documents, distances = vector_store.query_articles(
-            query_text=query_request.query,
-            top_k=query_request.top_k,
-            filter_dict=filter_dict if filter_dict else None
-        )
+        # Query vector store - use enhanced_db (same as storage)
+        if enhanced_db:
+            result = enhanced_db.query_articles(
+                query_text=query_request.query,
+                top_k=query_request.top_k,
+                metadata_filter=filter_dict if filter_dict else None
+            )
+            
+            if result.get('success'):
+                query_results = result.get('results', [])
+                ids = [r.get('id', '') for r in query_results]
+                metadatas = [r.get('metadata', {}) for r in query_results]
+                documents = [r.get('content', '') for r in query_results]
+                distances = [1 - r.get('similarity', 0) for r in query_results]  # Convert similarity to distance
+            else:
+                ids, metadatas, documents, distances = [], [], [], []
+        else:
+            # Fallback to vector_store
+            ids, metadatas, documents, distances = vector_store.query_articles(
+                query_text=query_request.query,
+                top_k=query_request.top_k,
+                filter_dict=filter_dict if filter_dict else None
+            )
         
         # Build response
         results = []
@@ -270,3 +319,656 @@ async def get_statistics():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve statistics: {str(e)}"
         )
+
+
+# ==================== Political Figure/Party Endpoints ====================
+
+@router.get(
+    "/parties/",
+    response_model=PartiesListResponse,
+    tags=["Political Analysis"]
+)
+async def get_parties():
+    """
+    Get list of political parties with associated popular figures.
+    
+    Returns all political parties found in the database along with
+    their most prominent figures based on article frequency.
+    """
+    try:
+        if enhanced_db is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Enhanced vector database not available"
+            )
+        
+        # Get all articles to analyze parties and figures
+        # We'll use a broad query to get a representative sample
+        all_articles = enhanced_db.collection.get(
+            limit=10000,  # Get up to 10k articles for analysis
+            include=["metadatas"]
+        )
+        
+        if not all_articles or 'metadatas' not in all_articles:
+            return PartiesListResponse(
+                parties=[],
+                total_parties=0
+            )
+        
+        # Import name normalizer
+        from name_normalizer import get_canonical_name, deduplicate_names
+        
+        # Analyze parties and figures
+        party_data = {}  # {party_name: {figures: {name: count}, total_articles: int}}
+        
+        for metadata in all_articles['metadatas']:
+            # Extract parties
+            parties_str = metadata.get('parties', '')
+            people_str = metadata.get('people', '')
+            
+            if not parties_str:
+                continue
+            
+            # Parse parties (comma-separated)
+            parties = [p.strip() for p in parties_str.split(',') if p.strip()]
+            people = [p.strip() for p in people_str.split(',') if p.strip()] if people_str else []
+            
+            # Normalize people names
+            people = [get_canonical_name(p) for p in people if p.strip()]
+            
+            for party in parties:
+                if party not in party_data:
+                    party_data[party] = {
+                        'figures': {},
+                        'total_articles': 0
+                    }
+                
+                party_data[party]['total_articles'] += 1
+                
+                # Associate people with this party (using canonical names)
+                for person in people:
+                    canonical_person = get_canonical_name(person)
+                    if canonical_person not in party_data[party]['figures']:
+                        party_data[party]['figures'][canonical_person] = 0
+                    party_data[party]['figures'][canonical_person] += 1
+        
+        # Build response
+        parties_list = []
+        for party_name, data in party_data.items():
+            # Get top 5 most mentioned figures
+            sorted_figures = sorted(
+                data['figures'].items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:5]
+            
+            # Extract figure names and deduplicate
+            popular_figures = deduplicate_names([figure[0] for figure in sorted_figures])
+            
+            parties_list.append(PartyResponse(
+                name=party_name,
+                figures=popular_figures,
+                total_articles=data['total_articles']
+            ))
+        
+        # Sort by total articles (most prominent first)
+        parties_list.sort(key=lambda x: x.total_articles, reverse=True)
+        
+        logger.info(f"Retrieved {len(parties_list)} political parties")
+        
+        return PartiesListResponse(
+            parties=parties_list,
+            total_parties=len(parties_list)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get parties: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve parties: {str(e)}"
+        )
+
+
+@router.get(
+    "/debug/database/",
+    tags=["Debug"]
+)
+async def debug_database():
+    """Debug endpoint to check database contents."""
+    try:
+        if enhanced_db is None:
+            return {"error": "Database not available"}
+        
+        # Get recent articles (sorted by date)
+        all_articles = enhanced_db.collection.get(
+            limit=20,  # Get more articles for debug
+            include=["metadatas", "documents"]
+        )
+        
+        if not all_articles:
+            return {"error": "No articles found"}
+        
+        # Sort by date to get recent articles first
+        metadatas = all_articles.get('metadatas', [])
+        # Filter for recent Bangla articles
+        bangla_articles = [m for m in metadatas if m.get('language') == 'Bangla']
+        recent_articles = sorted(metadatas, key=lambda x: x.get('date_ts', 0), reverse=True)[:10]
+        
+        debug_info = {
+            "total_articles": len(metadatas),
+            "bangla_articles_count": len(bangla_articles),
+            "recent_articles": recent_articles[:5],  # 5 most recent
+            "bangla_sample": bangla_articles[:3],  # 3 Bangla articles
+            "database_stats": enhanced_db.get_statistics() if hasattr(enhanced_db, 'get_statistics') else {}
+        }
+        
+        return debug_info
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post(
+    "/party/{party_name}/figure/{figure_name}/",
+    response_model=FigureProfileResponse,
+    tags=["Political Analysis"]
+)
+async def get_figure_profile(
+    party_name: str,
+    figure_name: str,
+    query_params: PartyFigureQueryRequest
+):
+    """
+    Get profile, speech summaries, and keywords for a political figure.
+    
+    This endpoint retrieves articles related to a specific political figure
+    within a party, including LLM-generated summaries and keywords.
+    
+    Supports date range filtering (e.g., 2024-08-05 to 2025-09-30).
+    
+    **Path Parameters:**
+    - party_name: Name of the political party (e.g., "BNP")
+    - figure_name: Name of the political figure (e.g., "Tareq Rahman")
+    
+    **Query Parameters:**
+    - query: Search query (default: "recent statements")
+    - date_from: Start date in YYYY-MM-DD format (e.g., "2024-08-05")
+    - date_to: End date in YYYY-MM-DD format (e.g., "2025-09-30")
+    - speeches_only: Filter for speeches only (default: false)
+    - top_k: Maximum number of results (default: 10, max: 50)
+    """
+    try:
+        if enhanced_db is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Enhanced vector database not available"
+            )
+        
+        # Validate date format if provided
+        if query_params.date_from:
+            try:
+                from datetime import datetime
+                datetime.strptime(query_params.date_from, '%Y-%m-%d')
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date_from format. Use YYYY-MM-DD (e.g., '2024-08-05')"
+                )
+        
+        if query_params.date_to:
+            try:
+                from datetime import datetime
+                datetime.strptime(query_params.date_to, '%Y-%m-%d')
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date_to format. Use YYYY-MM-DD (e.g., '2025-09-30')"
+                )
+        
+        # Use the convenience method for organized results
+        logger.info(f"Querying articles for {figure_name} ({party_name})")
+        logger.info(f"Query: {query_params.query}, Date range: {query_params.date_from} to {query_params.date_to}")
+        
+        results = enhanced_db.retrieve_articles_by_figure_or_party(
+            query=query_params.query,
+            political_figure=figure_name,
+            political_party=party_name,
+            date_from=query_params.date_from,
+            date_to=query_params.date_to,
+            speeches_only=query_params.speeches_only,
+            top_k=query_params.top_k
+        )
+        
+        # Check if any results found
+        if results['total_results'] == 0:
+            # Return empty but valid response
+            logger.warning(f"No articles found for {figure_name} ({party_name})")
+            return FigureProfileResponse(
+                figure_name=figure_name,
+                party_name=party_name,
+                total_articles=0,
+                articles=[],
+                summaries_by_date={}
+            )
+        
+        # Convert to response model
+        articles_list = []
+        for article in results['articles']:
+            articles_list.append(ArticleSummary(
+                id=article['id'],
+                title=article['title'],
+                date=article['date'],
+                source=article['source'],
+                similarity=article['similarity'],
+                summary=article.get('summary'),
+                key_points=article.get('key_points', []),
+                stance_analysis=article.get('stance_analysis'),
+                keywords=article.get('keywords', []),
+                key_phrases=article.get('key_phrases', []),
+                topics=article.get('topics', []),
+                url=article.get('url')
+            ))
+        
+        logger.info(f"Retrieved {len(articles_list)} articles for {figure_name}")
+        
+        return FigureProfileResponse(
+            figure_name=figure_name,
+            party_name=party_name,
+            total_articles=results['total_results'],
+            articles=articles_list,
+            summaries_by_date=results['summaries_by_date']
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get figure profile: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve figure profile: {str(e)}"
+        )
+
+
+@router.get(
+    "/party/{party_name}/",
+    response_model=FigureProfileResponse,
+    tags=["Political Analysis"]
+)
+async def get_party_articles(
+    party_name: str,
+    query: Optional[str] = Query("party statements", description="Search query"),
+    date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    speeches_only: bool = Query(False, description="Filter for speeches only"),
+    top_k: int = Query(10, description="Maximum results", ge=1, le=50)
+):
+    """
+    Get articles related to a political party.
+    
+    This endpoint retrieves articles about a political party with optional
+    date range filtering.
+    
+    **Path Parameters:**
+    - party_name: Name of the political party (e.g., "BNP", "Interim Government")
+    
+    **Query Parameters:**
+    - query: Search query (default: "party statements")
+    - date_from: Start date in YYYY-MM-DD format (e.g., "2024-08-05")
+    - date_to: End date in YYYY-MM-DD format (e.g., "2025-09-30")
+    - speeches_only: Filter for speeches only (default: false)
+    - top_k: Maximum number of results (default: 10, max: 50)
+    """
+    try:
+        if enhanced_db is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Enhanced vector database not available"
+            )
+        
+        # Validate date format if provided
+        if date_from:
+            try:
+                from datetime import datetime
+                datetime.strptime(date_from, '%Y-%m-%d')
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date_from format. Use YYYY-MM-DD"
+                )
+        
+        if date_to:
+            try:
+                from datetime import datetime
+                datetime.strptime(date_to, '%Y-%m-%d')
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date_to format. Use YYYY-MM-DD"
+                )
+        
+        logger.info(f"Querying articles for party: {party_name}")
+        
+        results = enhanced_db.retrieve_articles_by_figure_or_party(
+            query=query,
+            political_party=party_name,
+            date_from=date_from,
+            date_to=date_to,
+            speeches_only=speeches_only,
+            top_k=top_k
+        )
+        
+        if results['total_results'] == 0:
+            logger.warning(f"No articles found for party {party_name}")
+            return FigureProfileResponse(
+                figure_name="",
+                party_name=party_name,
+                total_articles=0,
+                articles=[],
+                summaries_by_date={}
+            )
+        
+        # Convert to response model
+        articles_list = []
+        for article in results['articles']:
+            articles_list.append(ArticleSummary(
+                id=article['id'],
+                title=article['title'],
+                date=article['date'],
+                source=article['source'],
+                similarity=article['similarity'],
+                summary=article.get('summary'),
+                key_points=article.get('key_points', []),
+                stance_analysis=article.get('stance_analysis'),
+                keywords=article.get('keywords', []),
+                key_phrases=article.get('key_phrases', []),
+                topics=article.get('topics', []),
+                url=article.get('url')
+            ))
+        
+        logger.info(f"Retrieved {len(articles_list)} articles for party {party_name}")
+        
+        return FigureProfileResponse(
+            figure_name="",
+            party_name=party_name,
+            total_articles=results['total_results'],
+            articles=articles_list,
+            summaries_by_date=results['summaries_by_date']
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get party articles: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve party articles: {str(e)}"
+        )
+
+
+@router.post(
+    "/scrape",
+    response_model=ScrapingResponse,
+    tags=["Scraping"],
+    summary="Scrape newspapers and store articles"
+)
+async def scrape_newspapers(request: ScrapingRequest):
+    """
+    Scrape articles from newspapers and automatically store in vector database.
+    
+    This endpoint will:
+    1. Scrape articles from specified newspapers (ProthomAlo, Jugantor, DailyStar, DhakaTribune)
+    2. Filter only political articles
+    3. Categorize and extract metadata
+    4. Generate embeddings
+    5. Perform LLM analysis (speech summaries, keywords, stance)
+    6. Store everything in ChromaDB
+    
+    Args:
+        request: ScrapingRequest with start_date, end_date, and newspapers list
+        
+    Returns:
+        ScrapingResponse with scraping statistics
+    """
+    import time
+    start_time = time.time()
+    
+    logger.info(f"Starting newspaper scraping: {request.start_date} to {request.end_date}")
+    logger.info(f"Newspapers: {', '.join(request.newspapers)}")
+    
+    try:
+        # Import required modules
+        from scraping import (
+            ProthomAloScraper,
+            JugantorScraper,
+            DailyStarScraper,
+            DhakaTribuneScraper
+        )
+        from categorization import ArticleCategorizer
+        from embeddings import EmbeddingGenerator
+        from llm_generation import LLMGenerator
+        
+        # Step 1: Scrape newspapers
+        all_articles = []
+        articles_by_source = {}
+        
+        scraper_map = {
+            "ProthomAlo": ProthomAloScraper,
+            "Jugantor": JugantorScraper,
+            "DailyStar": DailyStarScraper,
+            "DhakaTribune": DhakaTribuneScraper
+        }
+        
+        for newspaper in request.newspapers:
+            if newspaper not in scraper_map:
+                logger.warning(f"Unknown newspaper: {newspaper}, skipping")
+                continue
+            
+            try:
+                scraper_class = scraper_map[newspaper]
+                scraper = scraper_class(request.start_date, request.end_date)
+                articles = scraper.scrape_articles()
+                
+                all_articles.extend(articles)
+                articles_by_source[newspaper] = len(articles)
+                
+                logger.info(f"Scraped {len(articles)} articles from {newspaper}")
+                
+            except Exception as e:
+                logger.error(f"Error scraping {newspaper}: {e}")
+                articles_by_source[newspaper] = 0
+        
+        if not all_articles:
+            return ScrapingResponse(
+                status="completed",
+                total_articles_scraped=0,
+                total_articles_stored=0,
+                articles_by_source=articles_by_source,
+                processing_time=time.time() - start_time,
+                message="No articles found in the specified date range"
+            )
+        
+        logger.info(f"Total articles scraped: {len(all_articles)}")
+        
+        # Step 2: Categorization
+        logger.info("Starting categorization...")
+        categorizer = ArticleCategorizer()
+        categorized_articles = []
+        
+        for article in all_articles:
+            try:
+                categorization = categorizer.categorize_article(article)
+                # Merge categorization with original article
+                categorized = article.copy()
+                categorized.update(categorization)
+                categorized_articles.append(categorized)
+            except Exception as e:
+                logger.error(f"Error categorizing article: {e}")
+                continue
+        
+        logger.info(f"Categorized {len(categorized_articles)} articles")
+        
+        # Step 3: Generate embeddings
+        logger.info("Generating embeddings...")
+        try:
+            embedder = EmbeddingGenerator(model_name='all-MiniLM-L6-v2')
+            texts = [f"{a.get('title', '')}\n\n{a.get('content', '')}" for a in categorized_articles]
+            embeddings = embedder.generate_embeddings(texts, show_progress=False)
+            
+            for i, article in enumerate(categorized_articles):
+                article['embedding'] = embeddings[i]
+            
+            logger.info(f"Generated embeddings for {len(embeddings)} articles")
+        except Exception as e:
+            logger.error(f"Error generating embeddings: {e}")
+            # Continue without embeddings - ChromaDB will generate them
+        
+        # Step 4: LLM Analysis (Default: ON as requested)
+        logger.info("Starting LLM analysis...")
+        # Force enable LLM analysis as requested by user
+        llm_enabled = True
+        logger.info(f"LLM Analysis Enabled: {llm_enabled}")
+        if hasattr(request, 'enable_llm_analysis'):
+            logger.info(f"Request LLM flag: {request.enable_llm_analysis}")
+        else:
+            logger.info("No LLM flag in request, using default: True")
+        
+        if llm_enabled:
+            try:
+                llm = LLMGenerator(model="llama-3.3-70b-versatile", temperature=0.3)
+                
+                # Process ALL articles (no limitation as requested)
+                articles_to_process = len(categorized_articles)
+                logger.info(f"Processing LLM analysis for {articles_to_process} articles (processing all)")
+                
+                for i, article in enumerate(categorized_articles):
+                    try:
+                        print(f"\n{'='*100}")
+                        print(f"📰 PROCESSING ARTICLE {i+1}/{articles_to_process}")
+                        print(f"📰 Title: {article.get('title', 'N/A')[:80]}...")
+                        print(f"🏛️ Parties: {article.get('parties', [])}")
+                        print(f"👤 People: {article.get('people', [])}")
+                        print(f"🎤 Is Speech: {article.get('is_speech', False)}")
+                        print(f"🌐 Language: {article.get('language', 'English')}")
+                        print(f"{'='*100}")
+                        
+                        # Get content - handle both 'content' and 'text' keys
+                        article_content = article.get('content') or article.get('text', '')
+                        if not article_content:
+                            logger.warning(f"No content found for article {i}")
+                            continue
+                        
+                        # Speech summary for detected speeches
+                        if article.get('is_speech'):
+                            people = article.get('people', [])
+                            parties = article.get('parties', [])
+                            figure = people[0] if people else "Political Figure"
+                            party = parties[0] if parties else "Political Party"
+                            
+                            summary_result = llm.generate_speech_summary(
+                                article_content=article_content,
+                                article_title=article.get('title', ''),
+                                political_figure=figure,
+                                political_party=party,
+                                language="Bangla"  # Force Bangla responses as requested
+                            )
+                            article['llm_summary'] = summary_result
+                        
+                        # Extract keywords for all articles - use generate_keywords method
+                        keywords_result = llm.generate_keywords(
+                            article_content=article_content,
+                            article_title=article.get('title', ''),
+                            num_keywords=10,
+                            language="Bangla"  # Force Bangla responses as requested
+                        )
+                        article['llm_keywords'] = keywords_result
+                        
+                        # Print summary of results
+                        print(f"\n✅ LLM PROCESSING COMPLETED FOR ARTICLE {i+1}")
+                        if article.get('llm_summary'):
+                            print(f"📝 Summary Generated: ✅")
+                            print(f"🎯 Key Points: {len(article['llm_summary'].get('key_points', []))}")
+                        else:
+                            print(f"📝 Summary Generated: ❌ (Not a speech)")
+                        
+                        if article.get('llm_keywords'):
+                            print(f"🔑 Keywords: {len(article['llm_keywords'].get('keywords', []))}")
+                            print(f"📋 Phrases: {len(article['llm_keywords'].get('phrases', []))}")
+                            print(f"📊 Topics: {len(article['llm_keywords'].get('topics', []))}")
+                        
+                        print(f"⏱️ Waiting 2 seconds to avoid rate limits...")
+                        
+                        # Longer delay to avoid rate limits
+                        time.sleep(2)
+                        
+                    except Exception as e:
+                        logger.error(f"Error in LLM analysis for article {i}: {e}")
+                        continue
+                
+                # Print final LLM analysis summary
+                speech_count = sum(1 for article in categorized_articles if article.get('llm_summary'))
+                keyword_count = sum(1 for article in categorized_articles if article.get('llm_keywords'))
+                
+                print(f"\n{'='*100}")
+                print(f"🎉 LLM ANALYSIS COMPLETED SUCCESSFULLY!")
+                print(f"📊 Total Articles Processed: {len(categorized_articles)}")
+                print(f"🎤 Speech Summaries Generated: {speech_count}")
+                print(f"🔑 Keyword Analysis Completed: {keyword_count}")
+                print(f"⏱️ LLM Processing Time: {time.time() - start_time:.2f} seconds")
+                print(f"{'='*100}\n")
+                
+                logger.info("LLM analysis completed")
+            except Exception as e:
+                logger.error(f"LLM initialization failed: {e}")
+                # Continue without LLM analysis
+        else:
+            logger.info("LLM analysis skipped (disabled to avoid rate limits)")
+        
+        # Step 5: Store in Vector Database (THIS IS CRITICAL - DO NOT SKIP)
+        logger.info("Storing articles in vector database...")
+        stored_count = 0
+        
+        try:
+            # Use enhanced_db if available, otherwise create new instance
+            from datetime import datetime as dt
+            
+            for i, article in enumerate(categorized_articles):
+                try:
+                    article['id'] = f"article_{int(dt.now().timestamp())}_{i}"
+                except:
+                    pass
+            
+            result = enhanced_db.store_embeddings(
+                articles=categorized_articles,
+                batch_size=50
+            )
+            
+            if result.get('success'):
+                stored_count = result.get('stored', 0)
+                logger.info(f"Stored {stored_count} articles in vector database")
+            else:
+                logger.error(f"Storage failed: {result.get('message')}")
+        
+        except Exception as e:
+            logger.error(f"Error storing articles: {e}")
+        
+        # Calculate processing time
+        processing_time = time.time() - start_time
+        
+        return ScrapingResponse(
+            status="completed",
+            total_articles_scraped=len(all_articles),
+            total_articles_stored=stored_count,
+            articles_by_source=articles_by_source,
+            processing_time=processing_time,
+            message=f"Successfully scraped and stored {stored_count} political articles"
+        )
+    
+    except Exception as e:
+        logger.error(f"Scraping failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Scraping operation failed: {str(e)}"
+        )
+

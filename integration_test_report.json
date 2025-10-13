@@ -1,0 +1,183 @@
+{
+  "test_date": "2025-10-10T14:51:23.569413",
+  "total_articles": 3,
+  "analysis": {
+    "speech_articles": 3,
+    "stance_articles": 2,
+    "avg_categories": 7.666666666666667,
+    "top_parties": [
+      [
+        "Interim Government",
+        3
+      ],
+      [
+        "JI",
+        2
+      ],
+      [
+        "BNP",
+        1
+      ],
+      [
+        "NCP",
+        1
+      ]
+    ],
+    "top_people": [
+      [
+        "Mirza Fakhrul",
+        1
+      ],
+      [
+        "Tareq Rahman",
+        1
+      ],
+      [
+        "Mirza Fakhrul Islam Alamgir",
+        1
+      ],
+      [
+        "শফিকুর রহমান",
+        1
+      ],
+      [
+        "গোলাম পারওয়ার",
+        1
+      ]
+    ],
+    "top_keywords": [
+      [
+        "party",
+        2
+      ],
+      [
+        "reforms",
+        2
+      ],
+      [
+        "rahman",
+        1
+      ],
+      [
+        "reforms demanded",
+        1
+      ],
+      [
+        "rahman addresses",
+        1
+      ],
+      [
+        "bangladesh",
+        1
+      ],
+      [
+        "tareq rahman",
+        1
+      ],
+      [
+        "bnp",
+        1
+      ],
+      [
+        "chairman",
+        1
+      ],
+      [
+        "present",
+        1
+      ]
+    ]
+  },
+  "articles_summary": [
+    {
+      "title": "Tareq Rahman Addresses BNP Rally on Election Reforms",
+      "date": "2024-08-15",
+      "source": "Daily Star",
+      "language": "English",
+      "categories": [
+        "Interim Government",
+        "BNP",
+        "Democracy",
+        "Election Commission",
+        "Political Stance",
+        "Reform",
+        "Speech Analysis"
+      ],
+      "parties": [
+        "Interim Government",
+        "BNP"
+      ],
+      "people": [
+        "Mirza Fakhrul",
+        "Tareq Rahman",
+        "Mirza Fakhrul Islam Alamgir"
+      ],
+      "keywords": [
+        "rahman",
+        "reforms demanded",
+        "rahman addresses",
+        "bangladesh",
+        "tareq rahman"
+      ]
+    },
+    {
+      "title": "জামায়াত নেতা নির্বাচনী সংস্কারে মতামত দেন",
+      "date": "2024-08-20",
+      "source": "Prothom Alo",
+      "language": "Bangla",
+      "categories": [
+        "Interim Government",
+        "Democracy",
+        "JI",
+        "Election Commission",
+        "Political Stance",
+        "Reform",
+        "Speech Analysis"
+      ],
+      "parties": [
+        "JI",
+        "Interim Government"
+      ],
+      "people": [
+        "শফিকুর রহমান",
+        "গোলাম পারওয়ার"
+      ],
+      "keywords": []
+    },
+    {
+      "title": "Dr. Yunus Meets Political Leaders on Reform Agenda",
+      "date": "2024-09-05",
+      "source": "Dhaka Tribune",
+      "language": "English",
+      "categories": [
+        "Interim Government",
+        "Human Rights",
+        "NCP",
+        "Democracy",
+        "Economy",
+        "JI",
+        "Election Commission",
+        "Reform",
+        "Speech Analysis"
+      ],
+      "parties": [
+        "NCP",
+        "JI",
+        "Interim Government"
+      ],
+      "people": [
+        "Dr. Yunus",
+        "Sarjis Alam",
+        "Nahid Islam",
+        "Dr. Muhammad Yunus"
+      ],
+      "keywords": [
+        "political",
+        "reform",
+        "party",
+        "parties",
+        "dr"
+      ]
+    }
+  ]
+}
