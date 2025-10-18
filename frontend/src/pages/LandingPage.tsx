@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { Newspaper, Users, Search, Database } from 'lucide-react';
+import { Newspaper, Users, Search, Database, FileSearch, Vote } from 'lucide-react';
+import { TopicsCloud } from '../components/TopicsCloud';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -32,6 +33,13 @@ const LandingPage = () => {
       description: 'View and manage articles stored in the vector database',
       path: '/database',
       color: 'from-orange-500 to-orange-600'
+    },
+    {
+      icon: <Vote className=" " />,
+      title: '2026 Election Impact',
+      description: 'Articles with potential impact on Bangladesh\'s 2026 election',
+      path: '/election-impact',
+      color: 'from-purple-500 to-pink-600'
     }
   ];
 
@@ -65,7 +73,7 @@ const LandingPage = () => {
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           {features.map((feature, index) => (
             <div
               key={index}
@@ -86,6 +94,11 @@ const LandingPage = () => {
               </button>
             </div>
           ))}
+        </div>
+
+        {/* Topics Cloud Section */}
+        <div className="mb-12">
+          <TopicsCloud onTopicClick={(topic) => navigate(`/topics/${encodeURIComponent(topic)}`)} />
         </div>
 
         {/* Stats Section */}
@@ -187,6 +200,33 @@ const LandingPage = () => {
             </div>
           </div>
         </div>
+
+        {/* Developer Tools Section */}
+        <div className="bg-gradient-to-r from-gray-700 to-gray-800 rounded-xl shadow-lg p-8 mb-12">
+          <h3 className="text-2xl font-bold text-white mb-6 text-center">
+            Developer Tools
+          </h3>
+          <div className="grid grid-cols-1 gap-4">
+            <div
+              onClick={() => navigate('/categorization-test')}
+              className="bg-white/10 backdrop-blur-sm rounded-lg p-6 hover:bg-white/20 transition-all cursor-pointer border border-white/20"
+            >
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-500 flex items-center justify-center">
+                  <FileSearch className="text-white" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-white text-lg mb-1">Categorization Test</h4>
+                  <p className="text-gray-300 text-sm">
+                    Validate article categorization and party-figure associations in the database
+                  </p>
+                </div>
+                <div className="text-white opacity-50 text-2xl">→</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </main>
 
       {/* Footer */}

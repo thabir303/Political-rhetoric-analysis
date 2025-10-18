@@ -70,6 +70,11 @@ export interface FigureProfileResponse {
   total_articles: number
   articles: ArticleSummary[]
   summaries_by_date: Record<string, any[]>
+  figures?: string[]  // List of figures in the party (for party profiles)
+  ai_summary?: string  // AI-generated summary
+  ai_keywords?: string[]  // AI-generated keywords
+  ai_topics?: string[]  // AI-generated topics
+  last_analyzed?: string  // Last AI analysis timestamp
 }
 
 // Legacy interface for backward compatibility

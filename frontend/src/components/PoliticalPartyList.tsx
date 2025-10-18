@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { fetchPoliticalParties } from '../utils/api'
+import { AnalysisButton } from './AnalysisButton'
 import type { PoliticalParty } from '../types'
 
 /**
@@ -39,6 +40,12 @@ export default function PoliticalPartyList() {
     const encodedParty = encodeURIComponent(partyName)
     const encodedFigure = encodeURIComponent(figureName)
     navigate(`/figure/${encodedParty}/${encodedFigure}`)
+  }
+  
+  const handlePartyClick = (partyName: string) => {
+    // Navigate to party profile page
+    const encodedParty = encodeURIComponent(partyName)
+    navigate(`/party/${encodedParty}`)
   }
 
   const toggleParty = (partyName: string) => {
@@ -114,69 +121,79 @@ export default function PoliticalPartyList() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50">
       {/* Navigation Bar */}
-      <nav className="bg-white shadow-md px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center gap-6">
-          <Link to="/" className="text-xl font-bold text-blue-600 hover:text-blue-700">
-            Speech Analysis System
+      <nav className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <Link to="/" className="text-2xl font-bold text-gray-900 hover:text-blue-600 transition-colors">
+              Speech Analysis System
+            </Link>
+            <span className="text-gray-500 text-sm">Political Parties</span>
+          </div>
+          <Link
+            to="/scraper"
+            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+          >
+            Scrape Newspapers
           </Link>
-          <span className="text-gray-700 font-medium">Political Parties</span>
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">
-            Political Parties
+        <div className="mb-12 text-center">
+          <h1 className="text-5xl font-bold text-gray-900 mb-4">
+            Political Parties & Interim Government
           </h1>
-          <p className="text-gray-600">
+          <p className="text-xl text-gray-600">
             Explore {parties.length} political organizations and their key figures
           </p>
         </div>
 
         {/* Parties Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {parties.map((party) => (
           <div
             key={party.name}
-            className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden"
+            className="bg-white rounded-2xl border-2 border-gray-100 hover:border-blue-300 hover:shadow-xl transition-all duration-300 overflow-hidden group"
           >
             {/* Party Header */}
-            <div 
-              className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 cursor-pointer"
-              onClick={() => toggleParty(party.name)}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold mb-1">
+            <div className="p-8 border-b border-gray-100">
+              <div className="flex items-start justify-between mb-4">
+                <div 
+                  className="flex-1 cursor-pointer"
+                  onClick={() => handlePartyClick(party.name)}
+                >
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
                     {party.name}
                   </h2>
-                  <p className="text-blue-100 text-sm mb-3">
+                  <p className="text-gray-500 text-sm mb-4">
                     {party.full_name}
                   </p>
-                  <div className="flex items-center space-x-4 text-sm">
-                    <span className="flex items-center">
-                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                      </svg>
-                      {party?.figures?.length} figures
-                    </span>
+                  
+                  {/* Stats */}
+                  <div className="flex items-center gap-6 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span>{party?.figures?.length} figures</span>
+                    </div>
                     {party?.article_count !== undefined && (
-                      <span className="flex items-center">
-                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9 2a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V6.414A2 2 0 0016.414 5L14 2.586A2 2 0 0012.586 2H9z" />
-                          <path d="M3 8a2 2 0 012-2v10h8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-                        </svg>
-                        {party?.article_count} articles
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>{party?.article_count} articles</span>
+                      </div>
                     )}
                   </div>
                 </div>
-                <button className="text-white">
+                
+                <button 
+                  onClick={() => toggleParty(party.name)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100"
+                  title="Toggle figures list"
+                >
                   <svg 
-                    className={`w-6 h-6 transform transition-transform ${expandedParty === party.name ? 'rotate-180' : ''}`}
+                    className={`w-5 h-5 transform transition-transform duration-300 ${expandedParty === party.name ? 'rotate-180' : ''}`}
                     fill="none" 
                     viewBox="0 0 24 24" 
                     stroke="currentColor"
@@ -185,36 +202,43 @@ export default function PoliticalPartyList() {
                   </svg>
                 </button>
               </div>
+              
+              {/* AI Analysis Button */}
+              <AnalysisButton 
+                type="party" 
+                name={party.name}
+                className="w-full justify-center"
+              />
             </div>
 
-            {/* Figures List - Collapsible */}
+            {/* Figures List - Collapsible with Scrolling */}
             <div 
               className={`transition-all duration-300 ease-in-out ${
                 expandedParty === party.name ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
               } overflow-hidden`}
             >
               <div className="p-6">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                   Key Figures ({party?.figures?.length || 0})
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
                   {party?.figures?.map((figure, index) => (
                     <button
                       key={index}
                       onClick={() => handleFigureClick(party.name, figure)}
-                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 group"
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 group/figure"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-semibold group-hover/figure:bg-blue-100 group-hover/figure:text-blue-600 transition-colors flex-shrink-0">
                             {figure.charAt(0).toUpperCase()}
                           </div>
-                          <span className="font-medium text-gray-800 group-hover:text-blue-600">
+                          <span className="font-medium text-gray-800 group-hover/figure:text-blue-600 transition-colors">
                             {figure}
                           </span>
                         </div>
                         <svg 
-                          className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transform group-hover:translate-x-1 transition-transform" 
+                          className="w-4 h-4 text-gray-400 group-hover/figure:text-blue-600 transform group-hover/figure:translate-x-1 transition-all flex-shrink-0" 
                           fill="none" 
                           viewBox="0 0 24 24" 
                           stroke="currentColor"
@@ -233,7 +257,7 @@ export default function PoliticalPartyList() {
               <div className="px-6 pb-6">
                 <button
                   onClick={() => toggleParty(party.name)}
-                  className="w-full py-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  className="w-full py-3 text-sm text-gray-600 hover:text-blue-600 font-medium rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   View {party?.figures?.length} figures →
                 </button>
@@ -256,31 +280,31 @@ export default function PoliticalPartyList() {
 
       {/* Footer Stats */}
       {parties.length > 0 && (
-        <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+        <div className="mt-12 bg-white rounded-2xl border-2 border-gray-100 p-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             <div>
-              <div className="text-3xl font-bold text-blue-600">
+              <div className="text-4xl font-bold text-gray-900 mb-2">
                 {parties.length}
               </div>
-              <div className="text-sm text-gray-600 mt-1">Political Parties</div>
+              <div className="text-sm text-gray-500 font-medium">Political Parties</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-blue-600">
+              <div className="text-4xl font-bold text-gray-900 mb-2">
                 {parties.reduce((sum, party) => sum + (party?.figures?.length || 0), 0)}
               </div>
-              <div className="text-sm text-gray-600 mt-1">Key Figures</div>
+              <div className="text-sm text-gray-500 font-medium">Key Figures</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-blue-600">
+              <div className="text-4xl font-bold text-gray-900 mb-2">
                 {parties.reduce((sum, party) => sum + (party.article_count || 0), 0).toLocaleString()}
               </div>
-              <div className="text-sm text-gray-600 mt-1">Total Articles</div>
+              <div className="text-sm text-gray-500 font-medium">Total Articles</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-blue-600">
+              <div className="text-4xl font-bold text-gray-900 mb-2">
                 {parties.length > 0 ? Math.round(parties.reduce((sum, party) => sum + (party.article_count || 0), 0) / parties.length).toLocaleString() : 0}
               </div>
-              <div className="text-sm text-gray-600 mt-1">Avg. per Party</div>
+              <div className="text-sm text-gray-500 font-medium">Avg. per Party</div>
             </div>
           </div>
         </div>

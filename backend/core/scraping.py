@@ -13,53 +13,100 @@ import time
 import logging
 from urllib.parse import urljoin, urlparse
 import re
-from enhanced_scraping import get_article_analyzer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Political figures and parties to track
-# Canonical English names only for categorization test comparison
+# Enhanced Political Entities Structure with Party Names + Figures
+# Format: party_key -> {party_names: [], figures: {canonical_name: [variants]}}
 POLITICAL_ENTITIES = {
-    "BNP": ["Tareq Rahman", "Mirza Fakhrul", "Salahuddin Ahmed"],
-    "JI": ["Shafiqur Rahman", "Abu Taher", "Golam Parwar"],
-    "NCP": ["Nahid Islam", "Sarjis Alam", "Hasnat Abdullah", "Nasiruddin Patwary", "Akhter Hossain", "Tasnim Zara"],
-    "AB Party": ["Barrister Fuad"],
-    "GOP": ["Nurul Haque", "Rashed"],
-    "Gono Songhati": ["Jonayed Saki"],
-    "Interim Government": [
-        "Dr Yunus", "Shafiqul Alam", "Mahfuz Alam", "Asif Nazrul", "Rizwana Hasan",
-        "Lt Gen Jahangir Alam Chowdhury", "Ali Riaz", "Badiul Alam Majumder", 
-        "AMM Nasir Uddin", "General Waqar Uz Zaman", "IGP Baharul Alam", 
-        "DMP Commissioner Sajjat Ali", "Mahfuz Anam", "Mahmudur Rahman"
-    ]
+    "BNP": {
+        "party_names": [
+            "Bangladesh Nationalist Party", "BNP", 
+            "বাংলাদেশ জাতীয়তাবাদী দল", "বিএনপি"
+        ],
+        "figures": {
+            "Tareq Rahman": ["Tareq Rahman", "Tarek Rahman", "তারেক রহমান", "তারেক"],
+            "Mirza Fakhrul": ["Mirza Fakhrul", "Mirza Fakhrul Islam Alamgir", "মির্জা ফখরুল", "ফখরুল"],
+            "Salahuddin Ahmed": ["Salahuddin Ahmed", "সালাউদ্দিন আহমেদ", "সালাহউদ্দিন", "সালাহউদ্দিন আহমেদ"]
+        }
+    },
+    "JI": {
+        "party_names": [
+            "Jamaat-e-Islami Bangladesh", "Jamaat-e-Islami", "JI",
+            "জামায়াতে ইসলামি", "জামায়াত"
+        ],
+        "figures": {
+            "Shafiqur Rahman": ["Shafiqur Rahman", "শফিকুর রহমান"],
+            "Abu Taher": ["Abu Taher", "আবু তাহের"],
+            "Golam Parwar": ["Golam Parwar", "গোলাম পারওয়ার"]
+        }
+    },
+    "NCP": {
+        "party_names": [
+            "National Citizen Party", "National Citizens Party", "NCP",
+            "জাতীয় নাগরিক পার্টি", "নাগরিক পার্টি"
+        ],
+        "figures": {
+            "Nahid Islam": ["Nahid Islam", "নাহিদ ইসলাম"],
+            "Sarjis Alam": ["Sarjis Alam", "সরজিস আলম"],
+            "Hasnat Abdullah": ["Hasnat Abdullah", "হাসনাত আবদুল্লাহ"],
+            "Nasiruddin Patwary": ["Nasiruddin Patwary", "নাসিরউদ্দিন পাটোয়ারী"],
+            "Akhter Hossain": ["Akhter Hossain", "আখতার হোসেন"],
+            "Tasnim Zara": ["Tasnim Zara", "তাসনিম জারা"]
+        }
+    },
+    "AB Party": {
+        "party_names": [
+            "Amar Bangladesh Party", "AB Party", "ABP",
+            "আমার বাংলাদেশ পার্টি"
+        ],
+        "figures": {
+            "Barrister Fuad": ["Barrister Fuad", "ব্যারিস্টার ফুয়াদ", "Fuad"]
+        }
+    },
+    "GOP": {
+        "party_names": [
+            "Gono Odhikar Parishad", "GOP",
+            "গণ অধিকার পরিষদ"
+        ],
+        "figures": {
+            "Nurul Haque": ["Nurul Haque", "নুরুল হক"],
+            "Rashed": ["Rashed", "রাশেদ"]
+        }
+    },
+    "Gono Songhati": {
+        "party_names": [
+            "Gonosanghati Andolon", "Gono Songhati", "GSA",
+            "গণসংহতি আন্দোলন"
+        ],
+        "figures": {
+            "Jonayed Saki": ["Jonayed Saki", "জোনায়েদ সাকী"]
+        }
+    },
+    "Interim Government": {
+        "party_names": [
+            "Interim Government", "অন্তর্বর্তীকালীন সরকার"
+        ],
+        "figures": {
+            "Dr Yunus": ["Dr Yunus", "Dr. Yunus", "Muhammad Yunus", "ড. ইউনূস", "ড ইউনূস", "মুহাম্মদ ইউনূস"],
+            "Shafiqul Alam": ["Shafiqul Alam", "শফিকুল আলম"],
+            "Mahfuz Alam": ["Mahfuz Alam", "মাহফুজ আলম"],
+            "Asif Nazrul": ["Asif Nazrul", "আসিফ নজরুল"],
+            "Rizwana Hasan": ["Rizwana Hasan", "রিজওয়ানা হাসান"],
+            "Lt Gen Jahangir Alam Chowdhury": ["Jahangir Alam Chowdhury", "Lt Gen Jahangir", "জাহাঙ্গীর আলম চৌধুরী"],
+            "Ali Riaz": ["Ali Riaz", "আলী রিয়াজ"],
+            "Badiul Alam Majumder": ["Badiul Alam Majumder", "বদিউল আলম মজুমদার"],
+            "CEC AMM Nasir Uddin": ["AMM Nasir Uddin", "Nasir Uddin", "নাসির উদ্দিন"],
+            "Army Chief General Waqar Uz Zaman": ["Waqar Uz Zaman", "General Waqar", "ওয়াকার উজ জামান"],
+            "IGP Baharul Alam": ["Baharul Alam", "বাহারুল আলম"],
+            "DMP Commissioner Sajjat Ali": ["Sajjat Ali", "সাজ্জাত আলী"],
+            "Mahfuz Anam": ["Mahfuz Anam", "মাহফুজ আনাম"],
+            "Mahmudur Rahman": ["Mahmudur Rahman", "মাহমুদুর রহমান"]
+        }
+    }
 }
-
-# Full search list with Bangla variants for article detection
-ALL_POLITICAL_FIGURES = {
-    "BNP": ["Tareq Rahman", "Mirza Fakhrul", "Salahuddin Ahmed", "তারেক রহমান", "মির্জা ফখরুল", "সালাউদ্দিন আহমেদ"],
-    "JI": ["Shafiqur Rahman", "Abu Taher", "Golam Parwar", "শফিকুর রহমান", "আবু তাহের", "গোলাম পারওয়ার"],
-    "NCP": ["Nahid Islam", "Sarjis Alam", "Hasnat Abdullah", "Nasiruddin Patwary", "Akhter Hossain", 
-            "Tasnim Zara", "নাহিদ ইসলাম", "সরজিস আলম", "হাসনাত আবদুল্লাহ", "নাসিরউদ্দিন পাটোয়ারী"],
-    "AB Party": ["Barrister Fuad", "ব্যারিস্টার ফুয়াদ"],
-    "GOP": ["Nurul Haque", "Rashed", "নুরুল হক", "রাশেদ"],
-    "Gono Songhati": ["Jonayed Saki", "জোনায়েদ সাকী"],
-    "Interim Government": [
-        "Dr. Yunus", "Dr Yunus", "Shafiqul Alam", "Mahfuz Alam", "Asif Nazrul", "Rizwana Hasan",
-        "Lt Gen Jahangir Alam Chowdhury", "Ali Riaz", "Badiul Alam Majumder", 
-        "AMM Nasir Uddin", "General Waqar Uz Zaman", "IGP Baharul Alam", 
-        "DMP Commissioner Sajjat Ali", "Mahfuz Anam", "Mahmudur Rahman",
-        "ড. ইউনূস", "ড ইউনূস", "শফিকুল আলম", "মাহফুজ আলম", "আসিফ নজরুল", "রিজওয়ানা হাসান",
-        "জাহাঙ্গীর আলম চৌধুরী", "বদিউল আলম মজুমদার", "ওয়াকার উজ জামান", 
-        "বেনজীর আহমেদ", "মাহফুজ আনাম", "মাহমুদুর রহমান"
-    ]
-}
-
-# Flatten all entities for easier searching
-ALL_ENTITIES = []
-for party, members in ALL_POLITICAL_FIGURES.items():
-    ALL_ENTITIES.extend(members)
 
 
 class NewspaperScraper:
@@ -85,33 +132,75 @@ class NewspaperScraper:
         self.session.headers.update(self.headers)
         logger.info(f"Initialized scraper for date range: {start_date} to {end_date}")
     
+    def detect_political_entities(self, text: str) -> Dict:
+        """
+        Detect all political entities (parties + figures) in text with structured data.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Dictionary with party -> {party_mentioned, figures} mapping
+            
+        Example:
+            {
+                "BNP": {
+                    "party_mentioned": True,
+                    "figures": ["Tareq Rahman", "Mirza Fakhrul"]
+                },
+                "NCP": {
+                    "party_mentioned": False,
+                    "figures": ["Nahid Islam"]
+                }
+            }
+        """
+        if not text:
+            return {}
+        
+        text_lower = text.lower()
+        result = {}
+        
+        for party_key, party_data in POLITICAL_ENTITIES.items():
+            party_mentioned = False
+            figures_found = []
+            
+            # Check if party name is mentioned
+            for party_name in party_data["party_names"]:
+                if party_name.lower() in text_lower:
+                    party_mentioned = True
+                    break
+            
+            # Check if any figure is mentioned
+            for figure_canonical, figure_variants in party_data["figures"].items():
+                for variant in figure_variants:
+                    if variant.lower() in text_lower:
+                        # Use canonical name (first one in the list)
+                        if figure_canonical not in figures_found:
+                            figures_found.append(figure_canonical)
+                        break
+            
+            # Add to result if party or any figure is mentioned
+            if party_mentioned or figures_found:
+                result[party_key] = {
+                    "party_mentioned": party_mentioned,
+                    "figures": figures_found
+                }
+        
+        return result
+    
     def check_mentions(self, text: str) -> List[str]:
         """
-        Check if text mentions any political entities.
+        Legacy function - returns list of party keys that are mentioned.
+        Uses detect_political_entities internally.
         
         Args:
             text: Text to search
             
         Returns:
-            List of mentioned parties
+            List of party keys (e.g., ["BNP", "NCP"])
         """
-        if not text:
-            return []
-        
-        text_lower = text.lower()
-        mentions = []
-        
-        for entity in ALL_ENTITIES:
-            # Case-insensitive search for both English and Bangla
-            if entity.lower() in text_lower:
-                # Find which party this entity belongs to
-                for party, members in ALL_POLITICAL_FIGURES.items():
-                    if entity in members:
-                        if party not in mentions:
-                            mentions.append(party)
-                        break
-        
-        return mentions
+        entities = self.detect_political_entities(text)
+        return list(entities.keys()) if entities else []
     
     def is_within_date_range(self, article_date: datetime) -> bool:
         """Check if article date is within specified range."""
@@ -257,13 +346,20 @@ class ProthomAloScraper(NewspaperScraper):
                     logger.warning(f"Insufficient content for {url}")
                     return None
             
-            # Check for political mentions
+            # Check for political mentions (for categorization)
             combined_text = f"{title} {content}"
-            mentions = self.check_mentions(combined_text)
+            political_entities = self.detect_political_entities(combined_text)
+            mentions = list(political_entities.keys()) if political_entities else []
             
+            # For politics section, accept all articles even without specific entity mentions
             if not mentions:
-                logger.debug(f"No political mentions in {url}")
-                return None
+                mentions = ["General Politics"]
+                political_entities = {}  # Empty dict for general politics
+            
+            # Extract all mentioned figures across all parties
+            all_figures = []
+            for party_data in political_entities.values():
+                all_figures.extend(party_data.get("figures", []))
             
             # Extract category
             sections = story_data.get('sections', [])
@@ -274,7 +370,10 @@ class ProthomAloScraper(NewspaperScraper):
                 'date': article_date.strftime('%Y-%m-%d'),
                 'content': content,
                 'url': url,
-                'mentions': mentions,
+                'mentions': mentions,  # Simple list for backward compatibility
+                'political_entities': political_entities,  # Detailed party -> figures mapping
+                'mentioned_figures': all_figures,  # Flat list of all figures
+                'primary_parties': mentions,  # Same as mentions, for clarity
                 'source': 'Prothom Alo',
                 'language': 'Bangla',
                 'category': category
@@ -598,13 +697,21 @@ class JugantorScraper(NewspaperScraper):
                 logger.warning(f"Insufficient content for {url}")
                 return None
             
-            # Check mentions
+            # Check mentions (for categorization, not filtering)
             combined_text = f"{title} {content}"
-            mentions = self.check_mentions(combined_text)
+            political_entities = self.detect_political_entities(combined_text)
+            mentions = list(political_entities.keys()) if political_entities else []
             
+            # Since we're already filtering by /politics/ URL, accept all articles
+            # even if they don't mention specific entities
             if not mentions:
-                logger.debug(f"No political mentions in {url}")
-                return None
+                mentions = ["General Politics"]
+                political_entities = {}  # Empty dict for general politics
+            
+            # Extract all mentioned figures across all parties
+            all_figures = []
+            for party_data in political_entities.values():
+                all_figures.extend(party_data.get("figures", []))
             
             # Extract author
             author = ""
@@ -626,7 +733,10 @@ class JugantorScraper(NewspaperScraper):
                 'date': date,
                 'content': content,
                 'url': url,
-                'mentions': mentions,
+                'mentions': mentions,  # Simple list for backward compatibility
+                'political_entities': political_entities,  # Detailed party -> figures mapping
+                'mentioned_figures': all_figures,  # Flat list of all figures
+                'primary_parties': mentions,  # Same as mentions, for clarity
                 'source': 'Jugantor',
                 'language': 'Bangla',
                 'category': category,
@@ -726,12 +836,20 @@ class DailyStarScraper(NewspaperScraper):
                 content_divs = soup.find_all('p')
             content = ' '.join([p.get_text(strip=True) for p in content_divs])
             
-            # Check mentions
+            # Check mentions (for categorization)
             combined_text = f"{title} {content}"
-            mentions = self.check_mentions(combined_text)
+            political_entities = self.detect_political_entities(combined_text)
+            mentions = list(political_entities.keys()) if political_entities else []
             
+            # For politics section, accept all articles even without specific entity mentions
             if not mentions:
-                return None
+                mentions = ["General Politics"]
+                political_entities = {}  # Empty dict for general politics
+            
+            # Extract all mentioned figures across all parties
+            all_figures = []
+            for party_data in political_entities.values():
+                all_figures.extend(party_data.get("figures", []))
             
             # Extract author
             author_elem = soup.find('span', class_=re.compile(r'author'))
@@ -745,7 +863,10 @@ class DailyStarScraper(NewspaperScraper):
                 'date': article_date.strftime('%Y-%m-%d'),
                 'content': content,
                 'url': url,
-                'mentions': mentions,
+                'mentions': mentions,  # Simple list for backward compatibility
+                'political_entities': political_entities,  # Detailed party -> figures mapping
+                'mentioned_figures': all_figures,  # Flat list of all figures
+                'primary_parties': mentions,  # Same as mentions, for clarity
                 'source': 'Daily Star',
                 'language': 'English',
                 'category': category,
@@ -863,12 +984,20 @@ class DhakaTribuneScraper(NewspaperScraper):
                 content_divs = soup.find_all('p')
             content = ' '.join([p.get_text(strip=True) for p in content_divs])
             
-            # Check mentions
+            # Check mentions (for categorization)
             combined_text = f"{title} {content}"
-            mentions = self.check_mentions(combined_text)
+            political_entities = self.detect_political_entities(combined_text)
+            mentions = list(political_entities.keys()) if political_entities else []
             
+            # For politics section, accept all articles even without specific entity mentions
             if not mentions:
-                return None
+                mentions = ["General Politics"]
+                political_entities = {}  # Empty dict for general politics
+            
+            # Extract all mentioned figures across all parties
+            all_figures = []
+            for party_data in political_entities.values():
+                all_figures.extend(party_data.get("figures", []))
             
             # Extract author
             author_elem = soup.find('a', class_=re.compile(r'author')) or soup.find('span', class_=re.compile(r'author'))
@@ -882,7 +1011,10 @@ class DhakaTribuneScraper(NewspaperScraper):
                 'date': article_date.strftime('%Y-%m-%d'),
                 'content': content,
                 'url': url,
-                'mentions': mentions,
+                'mentions': mentions,  # Simple list for backward compatibility
+                'political_entities': political_entities,  # Detailed party -> figures mapping
+                'mentioned_figures': all_figures,  # Flat list of all figures
+                'primary_parties': mentions,  # Same as mentions, for clarity
                 'source': 'Dhaka Tribune',
                 'language': 'English',
                 'category': category,
@@ -929,83 +1061,43 @@ def scrape_all_newspapers(start_date: str = "2024-08-05", end_date: str = "2025-
 
 def save_articles_to_vector_db(articles: List[Dict]):
     """
-    Save scraped articles to the vector database with LLM analysis.
+    Save scraped articles to the vector database.
     
     Args:
         articles: List of article dictionaries
     """
     from database import vector_store
     
-    # Initialize LLM analyzer
-    analyzer = get_article_analyzer()
+    logger.info(f"Saving {len(articles)} articles to vector database...")
     
-    logger.info(f"Saving {len(articles)} articles to vector database with LLM analysis...")
-    successful = 0
-    failed = 0
-    
-    for idx, article in enumerate(articles, 1):
+    for article in articles:
         try:
-            logger.info(f"Processing article {idx}/{len(articles)}: {article['title'][:50]}...")
-            
-            # Perform LLM analysis during scraping
-            analysis = analyzer.analyze_article(
-                article_content=article['content'],
-                article_title=article['title'],
-                article_date=article.get('date', ''),
-                political_party=article.get('party', ''),
-                political_figure=article.get('mentions', [None])[0] if article.get('mentions') else None
-            )
-            
-            # Prepare metadata with enhanced LLM analysis
+            # Prepare metadata
             metadata = {
-                # Original fields
                 'date': article['date'],
                 'category': article.get('category', 'general'),
                 'persons': ', '.join(article['mentions']),
                 'source': article['source'],
                 'title': article['title'],
                 'language': article.get('language', 'Unknown'),
-                'url': article['url'],
-                
-                # NEW: Enhanced LLM analysis fields
-                'original_content': article['content'],  # Backup of full text
-                'summary': analysis['summary'],
-                'keywords': ','.join(analysis['keywords']),  # Comma-separated
-                'topics': ','.join(analysis['topics']),  # Comma-separated
-                'election_2026_impact': analysis['election_2026_impact'],
-                'has_election_impact': analysis['has_election_impact'],
-                
-                # Processing metadata
-                'analyzed_at': analysis['analyzed_at'],
-                'analysis_language': analysis['language'],
-                'processing_time': analysis['processing_time']
+                'url': article['url']
             }
             
             if 'author' in article and article['author']:
                 metadata['author'] = article['author']
             
-            # Store summary as main document (better for semantic search)
-            # Full content is in metadata['original_content']
+            # Add to vector database
             vector_store.add_article(
-                content=analysis['summary'],  # Use summary for search
+                content=article['content'],
                 metadata=metadata
             )
             
-            successful += 1
-            logger.info(f"✓ Saved with analysis: {article['title'][:50]}... "
-                       f"(Keywords: {len(analysis['keywords'])}, Topics: {len(analysis['topics'])}, "
-                       f"Election Impact: {analysis['has_election_impact']})")
+            logger.info(f"Saved: {article['title'][:50]}...")
             
         except Exception as e:
-            failed += 1
-            logger.error(f"✗ Error saving article to database: {e}")
-            logger.error(f"  Article: {article.get('title', 'Unknown')}")
+            logger.error(f"Error saving article to database: {e}")
     
-    logger.info(f"\n{'='*80}")
-    logger.info(f"Database save complete!")
-    logger.info(f"  ✓ Successful: {successful}/{len(articles)}")
-    logger.info(f"  ✗ Failed: {failed}/{len(articles)}")
-    logger.info(f"{'='*80}\n")
+    logger.info("Finished saving articles to database")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,63 @@
+{
+  "parties": {},
+  "figures": {
+    "Tareq Rahman": {
+      "keywords": [],
+      "topics": [],
+      "summary": "",
+      "articles_analyzed": 22,
+      "associated_party": " GOP",
+      "last_updated": "2025-10-16T13:15:53.025156",
+      "timestamp": 1760598953.02517
+    },
+    "Salahuddin Ahmed": {
+      "keywords": [
+        "Salahuddin Ahmed",
+        "July Charter",
+        "Referendum",
+        "BNP",
+        "Abduction",
+        "National Consensus Commission",
+        "Election",
+        "Shilong",
+        "Border",
+        "Interim Government"
+      ],
+      "topics": [
+        "Salahuddin Ahmed's alleged abduction and return",
+        "BNP's proposals for July Charter implementation",
+        "Referendum timing and process",
+        "Role in National Consensus Commission",
+        "Critique of past government's actions"
+      ],
+      "summary": "Salahuddin Ahmed, a permanent committee member of BNP, has recently returned to Bangladesh after nearly nine years in India following an alleged abduction in 2015",
+      "articles_analyzed": 5,
+      "associated_party": " Interim Government",
+      "last_updated": "2025-10-16T12:43:03.098212",
+      "timestamp": 1760596983.098227
+    },
+    "Nahid Islam": {
+      "keywords": [],
+      "topics": [],
+      "summary": "",
+      "articles_analyzed": 22,
+      "associated_party": " JI",
+      "last_updated": "2025-10-16T12:49:06.482476",
+      "timestamp": 1760597346.482504
+    },
+    "Army Chief General Waqar Uz Zaman": {
+      "keywords": [
+        "July Charter",
+        "National Election (2026)",
+        "BNP",
+        "Referendum"
+      ],
+      "topics": [],
+      "summary": "",
+      "articles_analyzed": 6,
+      "associated_party": " Interim Government",
+      "last_updated": "2025-10-16T12:54:05.071050",
+      "timestamp": 1760597645.071065
+    }
+  }
+}

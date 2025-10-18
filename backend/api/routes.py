@@ -5,8 +5,9 @@ from fastapi import APIRouter, HTTPException, status, Query
 from typing import List, Optional
 import time
 import logging
+from pydantic import BaseModel
 
-from models import (
+from backend.models import (
     ArticleCreate,
     ArticleResponse,
     QueryRequest,
@@ -23,14 +24,14 @@ from models import (
     ScrapingRequest,
     ScrapingResponse,
 )
-from database import vector_store
-from config import settings
+from backend.database import vector_store
+from backend.config import settings
 
 # Import VectorDatabase for enhanced filtering
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from vector_db import VectorDatabase
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from backend.core.vector_db import VectorDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,52 @@ try:
 except Exception as e:
     logger.warning(f"Could not initialize enhanced vector database: {e}")
     enhanced_db = None
+
+
+def normalize_name_to_canonical(name: str) -> Optional[str]:
+    """
+    Convert any name variant (English/Bangla) to its canonical English name.
+    
+    Args:
+        name: Name to normalize (can be English or Bangla)
+        
+    Returns:
+        Canonical English name if found, otherwise None
+    """
+    from backend.core.scraping import POLITICAL_ENTITIES
+    
+    name_stripped = name.strip()
+    
+    # Search through all parties and figures
+    for party_key, party_data in POLITICAL_ENTITIES.items():
+        if isinstance(party_data, dict) and "figures" in party_data:
+            for canonical_name, variants in party_data["figures"].items():
+                # Check if name matches canonical name or any variant
+                if name_stripped == canonical_name or name_stripped in variants:
+                    return canonical_name
+    
+    # If not found, return the original name
+    return name_stripped
+
+
+def get_correct_party_for_figure(figure_canonical: str) -> Optional[str]:
+    """
+    Get the correct party for a given figure's canonical name.
+    
+    Args:
+        figure_canonical: Canonical English name of the figure
+        
+    Returns:
+        Party key if found, otherwise None
+    """
+    from backend.core.scraping import POLITICAL_ENTITIES
+    
+    for party_key, party_data in POLITICAL_ENTITIES.items():
+        if isinstance(party_data, dict) and "figures" in party_data:
+            if figure_canonical in party_data["figures"]:
+                return party_key
+    
+    return None
 
 
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
@@ -356,7 +403,7 @@ async def get_parties():
             )
         
         # Import name normalizer
-        from name_normalizer import get_canonical_name, deduplicate_names
+        from backend.core.name_normalizer import get_canonical_name, deduplicate_names
         
         # Analyze parties and figures
         party_data = {}  # {party_name: {figures: {name: count}, total_articles: int}}
@@ -739,15 +786,15 @@ async def scrape_newspapers(request: ScrapingRequest):
     
     try:
         # Import required modules
-        from scraping import (
+        from backend.core.scraping import (
             ProthomAloScraper,
             JugantorScraper,
             DailyStarScraper,
             DhakaTribuneScraper
         )
-        from categorization import ArticleCategorizer
-        from embeddings import EmbeddingGenerator
-        from llm_generation import LLMGenerator
+        from backend.core.categorization import ArticleCategorizer
+        from backend.core.embeddings import EmbeddingGenerator
+        from backend.core.llm_generation import LLMGenerator
         
         # Step 1: Scrape newspapers
         all_articles = []
@@ -975,32 +1022,38 @@ async def scrape_newspapers(request: ScrapingRequest):
 
 # ==================== Analysis Endpoints (NEW) ====================
 
+# Request models for analysis endpoints
+class PartyAnalysisRequest(BaseModel):
+    party: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    max_articles: int = 50
+
+class FigureAnalysisRequest(BaseModel):
+    figure: str
+    party: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    max_articles: int = 50
+
 @router.post(
     "/analysis/party",
     tags=["LLM Analysis"],
     summary="Analyze stored articles for a political party using Gemini LLM"
 )
-async def analyze_party_articles(
-    party: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    max_articles: int = 50
-):
+async def analyze_party_articles(request: PartyAnalysisRequest):
     """
     Generate comprehensive analysis of stored articles for a specific political party.
     
     Uses Gemini LLM to analyze articles mentioning the party and generate insights.
     
     Args:
-        party: Party name (e.g., "BNP", "Awami League", "Interim Government")
-        start_date: Optional start date filter (YYYY-MM-DD)
-        end_date: Optional end date filter (YYYY-MM-DD)
-        max_articles: Maximum articles to analyze (default: 50)
+        request: PartyAnalysisRequest with party name and optional filters
     """
     try:
-        from llm_generation import LLMGenerator
+        from backend.core.llm_generation import LLMGenerator
         
-        logger.info(f"Starting LLM analysis for party: {party}")
+        logger.info(f"Starting LLM analysis for party: {request.party}")
         
         # Get articles from database
         if enhanced_db is None:
@@ -1010,19 +1063,19 @@ async def analyze_party_articles(
             )
         
         # Build where clause for filtering
-        where_clause = {"parties": {"$contains": party}}
+        where_clause = {"parties": {"$contains": request.party}}
         
         # Query articles
         results = enhanced_db.collection.get(
             where=where_clause,
-            limit=max_articles * 3,  # Get more to filter by date
+            limit=request.max_articles * 3,  # Get more to filter by date
             include=["documents", "metadatas"]
         )
         
         if not results or not results.get("documents"):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No articles found for party: {party}"
+                detail=f"No articles found for party: {request.party}"
             )
         
         # Filter by date if provided
@@ -1031,11 +1084,11 @@ async def analyze_party_articles(
             metadata = results["metadatas"][i]
             
             # Date filtering
-            if start_date or end_date:
+            if request.start_date or request.end_date:
                 article_date = metadata.get("date", "")
-                if start_date and article_date < start_date:
+                if request.start_date and article_date < request.start_date:
                     continue
-                if end_date and article_date > end_date:
+                if request.end_date and article_date > request.end_date:
                     continue
             
             articles.append({
@@ -1047,20 +1100,20 @@ async def analyze_party_articles(
                 "people": metadata.get("people", "")
             })
             
-            if len(articles) >= max_articles:
+            if len(articles) >= request.max_articles:
                 break
         
         if not articles:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No articles found for party {party} in the specified date range"
+                detail=f"No articles found for party {request.party} in the specified date range"
             )
         
         logger.info(f"Found {len(articles)} articles for analysis")
         
         # Generate LLM analysis
         llm_generator = LLMGenerator()
-        analysis_result = llm_generator.analyze_party_coverage(party, articles)
+        analysis_result = llm_generator.analyze_party_coverage(request.party, articles)
         
         # Get date range
         dates = [a["date"] for a in articles if a.get("date")]
@@ -1074,7 +1127,7 @@ async def analyze_party_articles(
         
         return {
             "success": True,
-            "party_or_figure": party,
+            "party_or_figure": request.party,
             "total_articles_analyzed": len(articles),
             "date_range": date_range,
             "analysis": {
@@ -1089,7 +1142,7 @@ async def analyze_party_articles(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Analysis failed for party {party}: {e}", exc_info=True)
+        logger.error(f"Analysis failed for party {request.party}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Analysis failed: {str(e)}"
@@ -1101,29 +1154,19 @@ async def analyze_party_articles(
     tags=["LLM Analysis"],
     summary="Analyze stored articles for a political figure using Gemini LLM"
 )
-async def analyze_figure_articles(
-    figure: str,
-    party: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    max_articles: int = 50
-):
+async def analyze_figure_articles(request: FigureAnalysisRequest):
     """
     Generate comprehensive analysis of stored articles for a specific political figure.
     
     Uses Gemini LLM to analyze articles mentioning the figure and generate insights.
     
     Args:
-        figure: Political figure name (e.g., "Tareq Rahman", "Dr Yunus")
-        party: Optional party filter
-        start_date: Optional start date filter (YYYY-MM-DD)
-        end_date: Optional end date filter (YYYY-MM-DD)
-        max_articles: Maximum articles to analyze (default: 50)
+        request: FigureAnalysisRequest with figure name, party, and optional filters
     """
     try:
-        from llm_generation import LLMGenerator
+        from backend.core.llm_generation import LLMGenerator
         
-        logger.info(f"Starting LLM analysis for figure: {figure}")
+        logger.info(f"Starting LLM analysis for figure: {request.figure}")
         
         # Get articles from database
         if enhanced_db is None:
@@ -1133,21 +1176,21 @@ async def analyze_figure_articles(
             )
         
         # Build where clause for filtering
-        where_clause = {"people": {"$contains": figure}}
-        if party:
-            where_clause["parties"] = {"$contains": party}
+        where_clause = {"people": {"$contains": request.figure}}
+        if request.party:
+            where_clause["parties"] = {"$contains": request.party}
         
         # Query articles
         results = enhanced_db.collection.get(
             where=where_clause,
-            limit=max_articles * 3,  # Get more to filter by date
+            limit=request.max_articles * 3,  # Get more to filter by date
             include=["documents", "metadatas"]
         )
         
         if not results or not results.get("documents"):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No articles found for figure: {figure}"
+                detail=f"No articles found for figure: {request.figure}"
             )
         
         # Filter by date if provided
@@ -1156,11 +1199,11 @@ async def analyze_figure_articles(
             metadata = results["metadatas"][i]
             
             # Date filtering
-            if start_date or end_date:
+            if request.start_date or request.end_date:
                 article_date = metadata.get("date", "")
-                if start_date and article_date < start_date:
+                if request.start_date and article_date < request.start_date:
                     continue
-                if end_date and article_date > end_date:
+                if request.end_date and article_date > request.end_date:
                     continue
             
             articles.append({
@@ -1172,20 +1215,20 @@ async def analyze_figure_articles(
                 "people": metadata.get("people", "")
             })
             
-            if len(articles) >= max_articles:
+            if len(articles) >= request.max_articles:
                 break
         
         if not articles:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No articles found for figure {figure} in the specified date range"
+                detail=f"No articles found for figure {request.figure} in the specified date range"
             )
         
         logger.info(f"Found {len(articles)} articles for analysis")
         
         # Generate LLM analysis
         llm_generator = LLMGenerator()
-        analysis_result = llm_generator.analyze_figure_coverage(figure, articles)
+        analysis_result = llm_generator.analyze_figure_coverage(request.figure, articles)
         
         # Get date range
         dates = [a["date"] for a in articles if a.get("date")]
@@ -1206,7 +1249,7 @@ async def analyze_figure_articles(
         
         return {
             "success": True,
-            "party_or_figure": figure,
+            "party_or_figure": request.figure,
             "total_articles_analyzed": len(articles),
             "date_range": date_range,
             "analysis": {
@@ -1222,7 +1265,7 @@ async def analyze_figure_articles(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Analysis failed for figure {figure}: {e}", exc_info=True)
+        logger.error(f"Analysis failed for figure {request.figure}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Analysis failed: {str(e)}"
@@ -1245,7 +1288,7 @@ async def get_categorization_test(limit: int = Query(default=50, le=200)):
         limit: Number of articles to return (max 200)
     """
     try:
-        from scraping import POLITICAL_ENTITIES
+        from backend.core.scraping import POLITICAL_ENTITIES
         
         if enhanced_db is None:
             raise HTTPException(
@@ -1270,14 +1313,28 @@ async def get_categorization_test(limit: int = Query(default=50, le=200)):
         ids = results.get("ids", [])
         for i in range(len(results["documents"])):
             metadata = results["metadatas"][i]
+            # Normalize parties and people into arrays
+            parties_raw = metadata.get("parties", "") or ""
+            people_raw = metadata.get("people", "") or ""
+            parties_arr = [p.strip() for p in parties_raw.split(",") if p.strip()]
+            people_arr = [p.strip() for p in people_raw.split(",") if p.strip()]
+
+            # Build per-person affiliation mapping using canonical names
+            people_affiliations = {}
+            for person in people_arr:
+                canonical = normalize_name_to_canonical(person)
+                affiliated_party = get_correct_party_for_figure(canonical)
+                people_affiliations[canonical] = affiliated_party if affiliated_party else ""
+
             articles.append({
                 "index": i + 1,
                 "id": ids[i] if i < len(ids) else f"article_{i+1}",
                 "title": metadata.get("title", ""),
                 "date": metadata.get("date", ""),
                 "source": metadata.get("source", ""),
-                "parties": metadata.get("parties", ""),
-                "people": metadata.get("people", ""),
+                "parties": parties_arr,
+                "people": people_arr,
+                "people_affiliations": people_affiliations,
                 "primary_parties": metadata.get("primary_parties", ""),
                 "mentioned_figures": metadata.get("mentioned_figures", ""),
                 "political_entities": metadata.get("political_entities", ""),
@@ -1286,33 +1343,69 @@ async def get_categorization_test(limit: int = Query(default=50, le=200)):
             })
         
         # Build party-figure breakdown from actual data
+        # Articles now contain arrays for parties and people, and people_affiliations mapping
         party_figure_breakdown = {}
         for article in articles:
-            parties_str = article.get("parties", "")
-            people_str = article.get("people", "")
-            
-            if parties_str:
-                parties = [p.strip() for p in parties_str.split(",") if p.strip()]
+            parties = article.get("parties", []) or []
+            people = article.get("people", []) or []
+
+            # For each person, determine canonical name and affiliation
+            for person in people:
+                canonical_name = normalize_name_to_canonical(person)
+                # If person has an explicit affiliation in this article, prefer it
+                affiliation = article.get("people_affiliations", {}).get(canonical_name, "")
+
+                # If affiliation is missing, try to infer from article-level parties
+                if not affiliation and parties:
+                    # If only one party is mentioned, associate person with that party
+                    if len(parties) == 1:
+                        affiliation = parties[0]
+                    else:
+                        # ambiguous: skip affiliation assignment
+                        affiliation = ""
+
                 for party in parties:
                     if party not in party_figure_breakdown:
                         party_figure_breakdown[party] = set()
-            
-            if people_str:
-                people = [p.strip() for p in people_str.split(",") if p.strip()]
-                for party in parties:
-                    if party in party_figure_breakdown:
-                        party_figure_breakdown[party].update(people)
-        
-        # Convert sets to lists
-        party_figure_breakdown = {
-            k: list(v) for k, v in party_figure_breakdown.items()
-        }
+
+                # If we determined affiliation, add to that party's set
+                if affiliation:
+                    if affiliation not in party_figure_breakdown:
+                        party_figure_breakdown[affiliation] = set()
+                    party_figure_breakdown[affiliation].add(canonical_name)
+                else:
+                    # Ambiguous: prefer the canonical party from POLITICAL_ENTITIES if available
+                    canonical_party = get_correct_party_for_figure(canonical_name)
+                    if canonical_party and canonical_party in parties:
+                        if canonical_party not in party_figure_breakdown:
+                            party_figure_breakdown[canonical_party] = set()
+                        party_figure_breakdown[canonical_party].add(canonical_name)
+                    else:
+                        # If only one party mentioned in article, associate with it
+                        if len(parties) == 1:
+                            only_party = parties[0]
+                            if only_party not in party_figure_breakdown:
+                                party_figure_breakdown[only_party] = set()
+                            party_figure_breakdown[only_party].add(canonical_name)
+                        else:
+                            # Ambiguous and no canonical match — skip adding to avoid cross-contamination
+                            pass
+
+        # Convert sets to sorted lists
+        party_figure_breakdown = {k: sorted(list(v)) for k, v in party_figure_breakdown.items()}
         
         # Get correct mapping from POLITICAL_ENTITIES
+        # Extract canonical figure names from nested structure
         correct_mapping = {}
-        for party_key, figures_list in POLITICAL_ENTITIES.items():
-            # POLITICAL_ENTITIES is a simple dict: {"BNP": ["Tareq Rahman", ...]}
-            correct_mapping[party_key] = figures_list
+        for party_key, party_data in POLITICAL_ENTITIES.items():
+            if isinstance(party_data, dict) and "figures" in party_data:
+                # New structure: {"BNP": {"party_names": [...], "figures": {"Tareq Rahman": [...]}}}
+                correct_mapping[party_key] = list(party_data["figures"].keys())
+            elif isinstance(party_data, list):
+                # Old structure: {"BNP": ["Tareq Rahman", ...]}
+                correct_mapping[party_key] = party_data
+            else:
+                correct_mapping[party_key] = []
         
         return {
             "total_articles": len(articles),

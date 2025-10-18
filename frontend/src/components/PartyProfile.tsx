@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { fetchFigureProfile } from '../utils/api'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import type { FigureProfileResponse } from '../types'
 import { AnalysisButton } from './AnalysisButton'
 
-export default function FigureProfile() {
-  const { partyName, figureName } = useParams<{ partyName: string; figureName: string }>()
+export default function PartyProfile() {
+  const { partyName } = useParams<{ partyName: string }>()
   const navigate = useNavigate()
   
   const [profile, setProfile] = useState<FigureProfileResponse | null>(null)
@@ -15,7 +14,6 @@ export default function FigureProfile() {
   // Date filter state
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
-  const [speechesOnly, setSpeechesOnly] = useState<boolean>(false)
   const [isFiltering, setIsFiltering] = useState(false)
   
   // Expanded articles state
@@ -26,9 +24,9 @@ export default function FigureProfile() {
   // Summarization state
   const [summarizingArticles, setSummarizingArticles] = useState<Set<string>>(new Set())
 
-  const loadProfile = async (from?: string, to?: string, speechOnly?: boolean) => {
-    if (!partyName || !figureName) {
-      setError('Missing party or figure name')
+  const loadProfile = async (from?: string, to?: string) => {
+    if (!partyName) {
+      setError('Missing party name')
       setLoading(false)
       return
     }
@@ -37,11 +35,26 @@ export default function FigureProfile() {
     setError(null)
 
     try {
-      const response = await fetchFigureProfile(partyName, figureName, from, to, speechOnly)
-      setProfile(response)
+      const response = await fetch(`http://localhost:8000/api/v1/parties/${encodeURIComponent(partyName)}/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          date_from: from,
+          date_to: to
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      setProfile(data)
     } catch (err) {
       setError(`Failed to load profile: ${err}`)
-      console.error('Error loading figure profile:', err)
+      console.error('Error loading party profile:', err)
     } finally {
       setLoading(false)
       setIsFiltering(false)
@@ -51,16 +64,15 @@ export default function FigureProfile() {
   useEffect(() => {
     setLoading(true)
     loadProfile()
-  }, [partyName, figureName])
+  }, [partyName])
 
   const handleApplyFilter = () => {
-    loadProfile(dateFrom || undefined, dateTo || undefined, speechesOnly)
+    loadProfile(dateFrom || undefined, dateTo || undefined)
   }
 
   const handleResetFilter = () => {
     setDateFrom('')
     setDateTo('')
-    setSpeechesOnly(false)
     loadProfile()
   }
   
@@ -119,7 +131,7 @@ export default function FigureProfile() {
       newFullArticles.set(articleId, data.summary)
       setFullArticles(newFullArticles)
       
-      // Update the profile articles with the generated summary (truncated version)
+      // Update the profile articles with the generated summary
       if (profile) {
         const updatedArticles = profile.articles.map(article =>
           article.id === articleId
@@ -139,9 +151,6 @@ export default function FigureProfile() {
       })
     }
   }
-
-  // Get speech count
-  const speechCount = profile ? profile.articles.filter(a => a.keywords.some(k => k.toLowerCase().includes('speech'))).length : 0
   
   // Get unique keywords
   const allKeywords = profile ? Array.from(new Set(profile.articles.flatMap(a => a.keywords))).slice(0, 20) : []
@@ -158,13 +167,13 @@ export default function FigureProfile() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-violet-50 py-12 px-4">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 py-12 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mb-4"></div>
-            <p className="text-xl text-gray-600">Loading profile data...</p>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600 mb-4"></div>
+            <p className="text-xl text-gray-600">Loading party profile...</p>
             <p className="text-sm text-gray-500 mt-2">
-              Fetching information for {figureName}
+              Fetching information for {partyName}
             </p>
           </div>
         </div>
@@ -175,7 +184,7 @@ export default function FigureProfile() {
   // Error state
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-violet-50 py-12 px-4">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 py-12 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="bg-red-50 border-2 border-red-200 rounded-xl p-8 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
@@ -183,21 +192,21 @@ export default function FigureProfile() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-red-800 mb-2">Failed to Load Profile</h3>
-            <p className="text-red-600 mb-6">{error || 'Profile data not available'}</p>
-            <div className="flex gap-4 justify-center">
+            <h2 className="text-2xl font-bold text-red-800 mb-2">Failed to Load Profile</h2>
+            <p className="text-red-600 mb-6">{error}</p>
+            <div className="flex gap-3 justify-center">
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => loadProfile()}
                 className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Try Again
               </button>
-              <button
-                onClick={() => navigate('/')}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              <Link
+                to="/parties"
+                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
               >
-                Go Back
-              </button>
+                Back to Parties
+              </Link>
             </div>
           </div>
         </div>
@@ -205,76 +214,106 @@ export default function FigureProfile() {
     )
   }
 
-  // Success state - Display profile
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-violet-50 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Back Button */}
-        <button
-          onClick={() => navigate(-1)}
-          className="mb-6 flex items-center gap-2 text-gray-600 hover:text-purple-600 transition-colors"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          <span className="font-medium">Back to Parties</span>
-        </button>
-
-        {/* Profile Header */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
-          <div className="bg-gradient-to-r from-purple-600 to-violet-700 px-8 py-12">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-6">
-                {/* Avatar */}
-                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-xl">
-                  <span className="text-4xl font-bold text-purple-600">
-                    {profile.figure_name.charAt(0)}
-                  </span>
-                </div>
-                
-                {/* Name and Party */}
-                <div className="text-white">
-                  <h1 className="text-4xl font-bold mb-2">{profile.figure_name}</h1>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
-                      {profile.party_name}
-                    </span>
-                  </div>
-                </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50">
+      {/* Header with Navigation */}
+      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate('/parties')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <svg className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{profile.figure_name}</h1>
+                <p className="text-sm text-gray-500">Party Profile</p>
               </div>
-              
-              {/* Analysis Button */}
-              <div className="mt-2">
-                <AnalysisButton
-                  type="figure"
-                  name={profile.figure_name}
-                  party={profile.party_name}
-                  className="bg-white/10 hover:bg-white/20 border-white/30"
-                />
+            </div>
+            
+            <AnalysisButton type="party" name={partyName || ''} />
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-gray-900">{profile.total_articles}</p>
+                <p className="text-sm text-gray-500">Total Articles</p>
               </div>
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6 bg-gray-50">
-            <div className="bg-white p-4 rounded-lg text-center shadow-sm">
-              <div className="text-3xl font-bold text-purple-600">{profile.total_articles}</div>
-              <div className="text-sm text-gray-600 mt-1">Total Articles</div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-gray-900">{allKeywords.length}</p>
+                <p className="text-sm text-gray-500">Keywords</p>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-lg text-center shadow-sm">
-              <div className="text-3xl font-bold text-green-600">{speechCount}</div>
-              <div className="text-sm text-gray-600 mt-1">Speeches</div>
-            </div>
-            <div className="bg-white p-4 rounded-lg text-center shadow-sm">
-              <div className="text-3xl font-bold text-purple-600">{allTopics.length}</div>
-              <div className="text-sm text-gray-600 mt-1">Topics</div>
-            </div>
-            <div className="bg-white p-4 rounded-lg text-center shadow-sm">
-              <div className="text-3xl font-bold text-orange-600">{allKeywords.length}</div>
-              <div className="text-sm text-gray-600 mt-1">Keywords</div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-gray-900">{Object.keys(profile.summaries_by_date).length}</p>
+                <p className="text-sm text-gray-500">Days Covered</p>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Key Figures Section */}
+        {profile.figures && profile.figures.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Key Figures ({profile.figures.length})
+            </h2>
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-64 overflow-y-auto">
+              {profile.figures.map((figure, index) => (
+                <button
+                  key={index}
+                  onClick={() => navigate(`/figure/${encodeURIComponent(partyName || '')}/${encodeURIComponent(figure)}`)}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all group text-left"
+                >
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-semibold group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors flex-shrink-0">
+                    {figure.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="font-medium text-gray-800 group-hover:text-blue-600 transition-colors text-sm truncate">
+                    {figure}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* AI Summary Section */}
         {profile.ai_summary && (
@@ -346,7 +385,7 @@ export default function FigureProfile() {
           </div>
         )}
 
-        {/* Date Range Filter */}
+        {/* Date Filter */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -355,7 +394,7 @@ export default function FigureProfile() {
             Filter Articles by Date
           </h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 From Date
@@ -379,25 +418,13 @@ export default function FigureProfile() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={speechesOnly}
-                  onChange={(e) => setSpeechesOnly(e.target.checked)}
-                  className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                />
-                <span className="text-sm font-medium text-gray-700">Speeches Only</span>
-              </label>
-            </div>
           </div>
           
           <div className="flex gap-3">
             <button
               onClick={handleApplyFilter}
               disabled={isFiltering}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isFiltering ? (
                 <>
@@ -423,13 +450,12 @@ export default function FigureProfile() {
             </button>
           </div>
           
-          {(dateFrom || dateTo || speechesOnly) && !isFiltering && (
+          {(dateFrom || dateTo) && !isFiltering && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
                 <strong>Active Filters:</strong>
                 {dateFrom && ` From ${new Date(dateFrom).toLocaleDateString()}`}
                 {dateTo && ` To ${new Date(dateTo).toLocaleDateString()}`}
-                {speechesOnly && ` • Speeches Only`}
               </p>
             </div>
           )}
@@ -519,7 +545,7 @@ export default function FigureProfile() {
                 <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                 </svg>
-                Articles & Speeches
+                Articles & News
                 <span className="ml-auto text-sm font-normal text-gray-500">
                   {profile.articles.length} items
                 </span>
@@ -540,7 +566,7 @@ export default function FigureProfile() {
                               href={article.url} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="font-bold text-gray-900 text-lg mb-2 line-clamp-2 hover:text-purple-600 transition-colors cursor-pointer block"
+                              className="font-bold text-gray-900 text-lg mb-2 line-clamp-2 hover:text-green-600 transition-colors cursor-pointer block"
                             >
                               {article.title}
                               <svg className="inline-block w-4 h-4 ml-1 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -564,27 +590,6 @@ export default function FigureProfile() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                               </svg>
                               {article.source}
-                            </span>
-                            <span className="flex items-center gap-1 text-blue-600">
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                              </svg>
-                        <button
-                          onClick={() => handleGenerateSummary(article.id)}
-                          disabled={summarizingArticles.has(article.id)}
-                          className="flex items-center gap-2 py-1.5 text-xs font-medium text-blue-600 hover:text-purple-700 cursor-pointer hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {summarizingArticles.has(article.id) ? (
-                            <>
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600"></div>
-                              <span>Generating...</span>
-                            </>
-                          ) : (
-                            <>
-                              <span>Generate Summary</span>
-                            </>
-                          )}
-                        </button>
                             </span>
                           </div>
                         </div>
@@ -633,27 +638,28 @@ export default function FigureProfile() {
                         </div>
                       )}
                       
-                    
-
-                      {/* Key Points */}
-                      {article.key_points && article.key_points.length > 0 && (
-                        <div className="mb-3">
-                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Key Points:</h4>
-                          <ul className="list-disc list-inside space-y-1">
-                            {article.key_points.map((point, idx) => (
-                              <li key={idx} className="text-sm text-gray-600">{point}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Stance Analysis */}
-                      {article.stance_analysis && (
-                        <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                          <h4 className="text-sm font-semibold text-yellow-800 mb-1">Stance Analysis:</h4>
-                          <p className="text-sm text-yellow-700">{article.stance_analysis}</p>
-                        </div>
-                      )}
+                      {/* Generate Summary Button */}
+                      <div className="flex justify-end pt-3 mt-3 border-t border-gray-100">
+                        <button
+                          onClick={() => handleGenerateSummary(article.id)}
+                          disabled={summarizingArticles.has(article.id)}
+                          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {summarizingArticles.has(article.id) ? (
+                            <>
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600"></div>
+                              <span>Generating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                              </svg>
+                              <span>Generate Summary</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
 
                       {/* Tags */}
                       <div className="flex flex-wrap gap-2 mt-3">

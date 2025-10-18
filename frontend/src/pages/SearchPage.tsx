@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowLeft, Loader2 } from 'lucide-react';
+import { Search, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 
 interface SearchResult {
   id: string;
@@ -13,6 +13,7 @@ interface SearchResult {
     persons?: string;
   };
   score: number;
+  summary?: string;
 }
 
 const SearchPage = () => {
@@ -21,6 +22,7 @@ const SearchPage = () => {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
 
   const handleSearch = async () => {
     if (!query.trim()) {
@@ -53,6 +55,39 @@ const SearchPage = () => {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateSummary = async (articleId: string) => {
+    setSummarizingId(articleId);
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/articles/${articleId}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate summary');
+      }
+
+      const data = await response.json();
+      
+      // Update the result with the summary
+      setResults(prevResults => 
+        prevResults.map(result => 
+          result.id === articleId 
+            ? { ...result, summary: data.summary, content: data.summary }
+            : result
+        )
+      );
+    } catch (err) {
+      console.error('Error generating summary:', err);
+      alert('Failed to generate summary. Please try again.');
+    } finally {
+      setSummarizingId(null);
     }
   };
 
@@ -155,9 +190,30 @@ const SearchPage = () => {
                     </span>
                   </div>
                 )}
-                <p className="text-gray-700 line-clamp-3">
+                <p className="text-gray-700 mb-4">
                   {result.content}
                 </p>
+                
+                {/* Generate Summary Button */}
+                <div className="flex justify-end pt-3 border-t border-gray-100">
+                  <button
+                    onClick={() => handleGenerateSummary(result.id)}
+                    disabled={summarizingId === result.id}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {summarizingId === result.id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Generate Summary</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

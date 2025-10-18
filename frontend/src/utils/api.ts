@@ -12,6 +12,9 @@ const apiClient = axios.create({
   timeout: 0, // No timeout - scraping can take a while
 })
 
+// Export apiClient for direct use (e.g., in test pages)
+export { apiClient }
+
 // Error handler
 function handleApiError(error: unknown, context: string): never {
   if (axios.isAxiosError(error)) {
@@ -176,7 +179,6 @@ export interface ScrapingRequest {
   start_date: string  // YYYY-MM-DD format
   end_date: string    // YYYY-MM-DD format
   newspapers?: string[]  // Optional, defaults to all newspapers
-  enable_llm_analysis?: boolean  // Optional, defaults to false (LLM is slow!)
 }
 
 export interface ScrapingResponse {
@@ -189,15 +191,16 @@ export interface ScrapingResponse {
 }
 
 /**
- * Trigger newspaper scraping with date range
+ * Trigger newspaper scraping with date range (NO LLM Analysis)
  * 
  * This will:
  * 1. Scrape articles from newspapers (ProthomAlo, Jugantor, DailyStar, DhakaTribune)
  * 2. Filter only political articles
  * 3. Categorize and extract metadata
  * 4. Generate embeddings
- * 5. Perform LLM analysis (summaries, keywords, stance)
- * 6. Automatically store in ChromaDB
+ * 5. Store in ChromaDB
+ * 
+ * NOTE: NO LLM analysis is performed. Use triggerLLMAnalysis() separately for analysis.
  * 
  * @param startDate - Start date in YYYY-MM-DD format (e.g., "2024-08-05")
  * @param endDate - End date in YYYY-MM-DD format (e.g., "2024-09-05")
@@ -220,20 +223,270 @@ export interface ScrapingResponse {
 export async function triggerScraping(
   startDate: string,
   endDate: string,
-  newspapers?: string[],
-  enableLlmAnalysis: boolean = true
+  newspapers?: string[]
 ): Promise<ScrapingResponse> {
   try {
     const requestData: ScrapingRequest = {
       start_date: startDate,
       end_date: endDate,
-      newspapers: newspapers || ["ProthomAlo", "Jugantor", "DailyStar", "DhakaTribune"],
-      enable_llm_analysis: enableLlmAnalysis
+      newspapers: newspapers || ["ProthomAlo", "Jugantor", "DailyStar", "DhakaTribune"]
     }
     
-    const response = await apiClient.post<ScrapingResponse>('/scrape', requestData)
+    const response = await apiClient.post<ScrapingResponse>('/scraping/newspapers', requestData)
     return response.data
   } catch (error) {
     return handleApiError(error, 'Trigger scraping')
+  }
+}
+
+// ==================== LLM Analysis Functions ====================
+
+export interface LLMAnalysisRequest {
+  party?: string
+  figure?: string
+  date_from?: string
+  date_to?: string
+  limit?: number
+  language?: string
+  include_summary?: boolean
+  include_keywords?: boolean
+  include_stance?: boolean
+}
+
+export interface ArticleAnalysis {
+  article_id: string
+  title: string
+  date?: string
+  party?: string
+  figures: string[]
+  summary?: {
+    summary: string
+    key_points: string[]
+    stance: string
+  }
+  keywords?: {
+    keywords: string[]
+    phrases: string[]
+    topics: string[]
+  }
+  stance?: string
+}
+
+export interface LLMAnalysisResponse {
+  status: string
+  total_analyzed: number
+  analyses: ArticleAnalysis[]
+  processing_time: number
+  message: string
+}
+
+/**
+ * Trigger LLM analysis on stored articles with filters
+ * 
+ * This will:
+ * 1. Query articles from database based on filters
+ * 2. Run LLM analysis (summaries, keywords, stance)
+ * 3. Return analysis results
+ * 
+ * @param request - LLM analysis request with filters
+ * @returns Promise with analysis results
+ * @throws Error if the request fails
+ * 
+ * @example
+ * ```typescript
+ * // Analyze BNP articles
+ * const result = await triggerLLMAnalysis({
+ *   party: "BNP",
+ *   date_from: "2024-10-01",
+ *   date_to: "2024-10-14",
+ *   limit: 10,
+ *   language: "Bangla"
+ * })
+ * 
+ * // Analyze specific figure
+ * const result = await triggerLLMAnalysis({
+ *   figure: "Tareq Rahman",
+ *   limit: 20
+ * })
+ * ```
+ */
+export async function triggerLLMAnalysis(
+  request: LLMAnalysisRequest
+): Promise<LLMAnalysisResponse> {
+  try {
+    const response = await apiClient.post<LLMAnalysisResponse>('/analysis/llm', request)
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'LLM Analysis')
+  }
+}
+
+/**
+ * Generate comprehensive party report
+ * 
+ * @param party - Party ID (e.g., "bnp", "ji", "ncp")
+ * @param limit - Maximum articles to analyze
+ * @param language - Analysis language
+ * @returns Promise with party report
+ * @throws Error if the request fails
+ * 
+ * @example
+ * ```typescript
+ * const report = await generatePartyReport("bnp", 50, "Bangla")
+ * console.log(report.top_topics)
+ * console.log(report.top_keywords)
+ * ```
+ */
+export async function generatePartyReport(
+  party: string,
+  limit: number = 50,
+  language: string = "Bangla"
+) {
+  try {
+    const response = await apiClient.post('/analysis/party-report', {
+      party,
+      limit,
+      language
+    })
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Generate party report')
+  }
+}
+
+/**
+ * Generate comprehensive figure report
+ * 
+ * @param figure - Political figure name
+ * @param party - Optional party filter
+ * @param limit - Maximum articles to analyze
+ * @param language - Analysis language
+ * @returns Promise with figure report
+ * @throws Error if the request fails
+ * 
+ * @example
+ * ```typescript
+ * const report = await generateFigureReport("Tareq Rahman", "bnp", 30)
+ * console.log(report.top_topics)
+ * ```
+ */
+export async function generateFigureReport(
+  figure: string,
+  party?: string,
+  limit: number = 50,
+  language: string = "Bangla"
+) {
+  try {
+    const params = new URLSearchParams({
+      figure,
+      limit: limit.toString(),
+      language
+    })
+    if (party) {
+      params.append('party', party)
+    }
+    
+    const response = await apiClient.post(`/analysis/figure-report?${params.toString()}`)
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Generate figure report')
+  }
+}
+
+/**
+ * Analyze stored articles for a specific political party using Gemini LLM
+ * 
+ * @param party - Party name (e.g., "BNP", "NCP", "Interim Government")
+ * @param startDate - Optional start date filter (YYYY-MM-DD)
+ * @param endDate - Optional end date filter (YYYY-MM-DD)
+ * @param maxArticles - Maximum articles to analyze (default: 50)
+ * @returns Promise with comprehensive party analysis
+ * @throws Error if the request fails
+ * 
+ * @example
+ * ```typescript
+ * const analysis = await analyzeStoredPartyArticles("BNP")
+ * const filtered = await analyzeStoredPartyArticles("BNP", "2024-01-01", "2024-12-31", 30)
+ * console.log(analysis.analysis.raw_analysis)
+ * ```
+ */
+export async function analyzeStoredPartyArticles(
+  party: string,
+  startDate?: string,
+  endDate?: string,
+  maxArticles: number = 50
+) {
+  try {
+    const response = await apiClient.post('/analysis/party', {
+      party,
+      start_date: startDate,
+      end_date: endDate,
+      max_articles: maxArticles
+    })
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Analyze stored party articles')
+  }
+}
+
+/**
+ * Analyze stored articles for a specific political figure using Gemini LLM
+ * 
+ * @param figure - Figure name (e.g., "Tareq Rahman", "Dr Yunus")
+ * @param party - Optional party filter
+ * @param startDate - Optional start date filter (YYYY-MM-DD)
+ * @param endDate - Optional end date filter (YYYY-MM-DD)
+ * @param maxArticles - Maximum articles to analyze (default: 50)
+ * @returns Promise with comprehensive figure analysis
+ * @throws Error if the request fails
+ * 
+ * @example
+ * ```typescript
+ * const analysis = await analyzeStoredFigureArticles("Tareq Rahman")
+ * const filtered = await analyzeStoredFigureArticles("Tareq Rahman", "BNP", "2024-01-01", "2024-12-31")
+ * console.log(analysis.analysis.raw_analysis)
+ * ```
+ */
+export async function analyzeStoredFigureArticles(
+  figure: string,
+  party?: string,
+  startDate?: string,
+  endDate?: string,
+  maxArticles: number = 50
+) {
+  try {
+    const response = await apiClient.post('/analysis/figure', {
+      figure,
+      party,
+      start_date: startDate,
+      end_date: endDate,
+      max_articles: maxArticles
+    })
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Analyze stored figure articles')
+  }
+}
+
+/**
+ * Fetch categorization test data to validate article-party-figure associations
+ * 
+ * @param limit - Number of articles to fetch (default: 50)
+ * @returns Promise with articles, party breakdown, and validation data
+ * @throws Error if the request fails
+ * 
+ * @example
+ * ```typescript
+ * const data = await fetchCategorizationTest(100)
+ * console.log(`Total articles: ${data.total_articles}`)
+ * console.log(`Issues found: ${data.issues_count}`)
+ * ```
+ */
+export async function fetchCategorizationTest(limit: number = 50) {
+  try {
+    const response = await apiClient.get(`/parties/categorization-test?limit=${limit}`)
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Fetch categorization test data')
   }
 }

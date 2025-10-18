@@ -11,6 +11,11 @@ from datetime import datetime
 from collections import Counter
 import logging
 
+# Import name normalizer for Bengali-English name mapping
+from backend.core.name_normalizer import get_canonical_name, deduplicate_names
+# Import the authoritative POLITICAL_ENTITIES from scraping module
+from backend.core.scraping import POLITICAL_ENTITIES
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,96 +34,6 @@ try:
 except ImportError:
     NUMPY_AVAILABLE = False
     logger.warning("numpy not available. Some features will be limited.")
-
-
-# Political entities and their variations
-POLITICAL_ENTITIES = {
-    "BNP": {
-        "names": [
-            "BNP", "Bangladesh Nationalist Party",
-            "বিএনপি", "বাংলাদেশ জাতীয়তাবাদী দল"
-        ],
-        "figures": [
-            "Tareq Rahman", "Tarique Rahman", "তারেক রহমান",
-            "Mirza Fakhrul", "Mirza Fakhrul Islam Alamgir", "মির্জা ফখরুল",
-            "Salahuddin Ahmed", "সালাউদ্দিন আহমেদ"
-        ]
-    },
-    "Jamaat-e-Islami": {
-        "names": [
-            "জামায়াত", "জামায়াতে ইসলামী"
-        ],
-        "figures": [
-            "Shafiqur Rahman", "শফিকুর রহমান",
-            "Abu Taher", "আবু তাহের",
-            "Golam Parwar", "গোলাম পারওয়ার"
-        ]
-    },
-    "NCP": {
-        "names": [
-            "National Citizens Party", "NCP",
-            "জাতীয় নাগরিক পার্টি"
-        ],
-        "figures": [
-            "Nahid Islam", "নাহিদ ইসলাম",
-            "Sarjis Alam", "সরজিস আলম",
-            "Hasnat Abdullah", "হাসনাত আবদুল্লাহ",
-            "Nasiruddin Patwary", "নাসিরউদ্দিন পাটোয়ারী",
-            "Akhter Hossain", "আখতার হোসেন",
-            "Tasnim Zara"
-        ]
-    },
-    "AB Party": {
-        "names": [
-            "AB Party", "Amar Bangladesh Party",
-            "আমার বাংলাদেশ পার্টি"
-        ],
-        "figures": [
-            "Barrister Fuad", "ব্যারিস্টার ফুয়াদ"
-        ]
-    },
-    "GOP": {
-        "names": [
-            "Gono Odhikar Parishad", "GOP",
-            "গণ অধিকার পরিষদ"
-        ],
-        "figures": [
-            "Nurul Haque", "নুরুল হক",
-            "Rashed", "রাশেদ"
-        ]
-    },
-    "Gono Songhati": {
-        "names": [
-            "Gono Songhati Andolon",
-            "গণ সংহতি আন্দোলন"
-        ],
-        "figures": [
-            "Jonayed Saki", "জোনায়েদ সাকী"
-        ]
-    },
-    "Interim Government": {
-        "names": [
-            "Interim Government", "Advisory Council",
-            "অন্তর্বর্তী সরকার", "উপদেষ্টা পরিষদ"
-        ],
-        "figures": [
-            "Dr. Yunus", "Dr. Muhammad Yunus", "ড. ইউনূস", "মুহাম্মদ ইউনূস",
-            "Shafiqul Alam", "শফিকুল আলম",
-            "Mahfuz Alam", "মাহফুজ আলম",
-            "Asif Nazrul", "আসিফ নজরুল",
-            "Rizwana Hasan", "রিজওয়ানা হাসান",
-            "Lt Gen Jahangir Alam Chowdhury", "জাহাঙ্গীর আলম চৌধুরী",
-            "Ali Riaz",
-            "Badiul Alam Majumder", "বদিউল আলম মজুমদার",
-            "AMM Nasir Uddin",
-            "General Waqar Uz Zaman", "ওয়াকার উজ জামান",
-            "IGP Baharul Alam", "বাহারুল আলম",
-            "DMP Commissioner Sajjat Ali",
-            "Mahfuz Anam", "মাহফুজ আনাম",
-            "Mahmudur Rahman", "মাহমুদুর রহমান"
-        ]
-    }
-}
 
 # Key political themes and keywords
 POLITICAL_THEMES = {
@@ -208,8 +123,9 @@ class ArticleCategorizer:
         Returns:
             Dictionary containing:
                 - categories: List of political themes
-                - people: List of political figures mentioned
+                - people: List of canonical political figures mentioned
                 - parties: List of political parties mentioned
+                - people_affiliations: Dictionary mapping canonical names to parties
                 - keywords: List of extracted keywords
                 - dates: List of dates mentioned
                 - is_speech: Boolean indicating if article discusses speeches
@@ -220,9 +136,25 @@ class ArticleCategorizer:
         content = article.get('content', '')
         combined_text = f"{title} {content}"
         
-        # Extract all components
-        parties = self._identify_parties(combined_text)
-        people = self._identify_people(combined_text)
+        # Extract all components with name normalization
+        parties_and_figures = self._identify_parties_and_figures(combined_text)
+        parties = list(parties_and_figures.keys())
+        
+        # Extract all people and normalize to canonical names
+        people_raw = self._identify_people(combined_text)
+        people_canonical = [get_canonical_name(name) for name in people_raw]
+        people_canonical = deduplicate_names(people_canonical)
+        
+        # Create people_affiliations mapping
+        people_affiliations = {}
+        for canonical_name in people_canonical:
+            # Find which party this person belongs to
+            for party_key, party_data in POLITICAL_ENTITIES.items():
+                canonical_figures = list(party_data.get("figures", {}).keys())
+                if canonical_name in canonical_figures:
+                    people_affiliations[canonical_name] = party_key
+                    break
+        
         themes = self._identify_themes(combined_text)
         keywords = self._extract_keywords(combined_text)
         dates = self._extract_dates(combined_text)
@@ -251,8 +183,9 @@ class ArticleCategorizer:
         
         return {
             'categories': categories,
-            'people': list(set(people)),
-            'parties': list(set(parties)),
+            'people': people_canonical,  # Now returns canonical names
+            'parties': parties,
+            'people_affiliations': people_affiliations,  # New field
             'keywords': keywords,
             'dates': dates,
             'is_speech': is_speech,
@@ -260,12 +193,52 @@ class ArticleCategorizer:
             'themes': themes,
             'metadata': {
                 'total_categories': len(categories),
-                'total_people': len(set(people)),
-                'total_parties': len(set(parties)),
+                'total_people': len(people_canonical),
+                'total_parties': len(parties),
                 'total_keywords': len(keywords),
                 'total_dates': len(dates)
             }
         }
+    
+    def _identify_parties_and_figures(self, text: str) -> Dict[str, List[str]]:
+        """
+        Identify political parties mentioned in text along with their figures.
+        Uses the new POLITICAL_ENTITIES structure from scraping module.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Dictionary mapping party names to list of canonical figures found
+        """
+        text_lower = text.lower()
+        result = {}
+        
+        for party_key, party_data in POLITICAL_ENTITIES.items():
+            party_mentioned = False
+            figures_found = []
+            
+            # Check if party name is mentioned
+            for party_name in party_data.get('party_names', []):
+                if party_name.lower() in text_lower:
+                    party_mentioned = True
+                    break
+            
+            # Check if any figure is mentioned (with normalization)
+            figures_dict = party_data.get('figures', {})
+            for canonical_name, variants in figures_dict.items():
+                for variant in variants:
+                    if variant.lower() in text_lower:
+                        # Add canonical name
+                        if canonical_name not in figures_found:
+                            figures_found.append(canonical_name)
+                        break
+            
+            # Add to result if party or any figure is mentioned
+            if party_mentioned or figures_found:
+                result[party_key] = figures_found
+        
+        return result
     
     def _identify_parties(self, text: str) -> List[str]:
         """
@@ -275,45 +248,59 @@ class ArticleCategorizer:
             text: Text to analyze
             
         Returns:
-            List of party names
+            List of party keys
         """
-        text_lower = text.lower()
-        parties = []
-        
-        for party, data in POLITICAL_ENTITIES.items():
-            # Check party names
-            for name in data['names']:
-                if name.lower() in text_lower:
-                    parties.append(party)
-                    break
-            
-            # Check if any party figure is mentioned
-            if party not in parties:
-                for figure in data['figures']:
-                    if figure.lower() in text_lower:
-                        parties.append(party)
-                        break
-        
-        return parties
+        parties_and_figures = self._identify_parties_and_figures(text)
+        return list(parties_and_figures.keys())
     
     def _identify_people(self, text: str) -> List[str]:
         """
-        Identify political figures mentioned in text.
+        Identify political figures mentioned in text (returns raw names for normalization).
+        Now includes partial name matching for better detection.
         
         Args:
             text: Text to analyze
             
         Returns:
-            List of people names
+            List of figure names (will be normalized by caller)
         """
         text_lower = text.lower()
         people = []
+        people_canonical_found = set()  # Track canonical names already found
         
-        for party, data in POLITICAL_ENTITIES.items():
-            for figure in data['figures']:
-                # Check for the person's name (case-insensitive)
-                if figure.lower() in text_lower:
-                    people.append(figure)
+        # Extract all name variants found in text
+        for party_key, party_data in POLITICAL_ENTITIES.items():
+            figures_dict = party_data.get('figures', {})
+            for canonical_name, variants in figures_dict.items():
+                # Skip if we already found this person
+                if canonical_name in people_canonical_found:
+                    continue
+                    
+                # Check each variant
+                for variant in variants:
+                    variant_lower = variant.lower()
+                    
+                    # Direct match
+                    if variant_lower in text_lower:
+                        people.append(variant)
+                        people_canonical_found.add(canonical_name)
+                        break
+                    
+                    # Partial match for compound names (check last part)
+                    # For example: "ইউনূস" should match "ড. ইউনূস" or "মুহাম্মদ ইউনূস"
+                    variant_parts = variant_lower.split()
+                    if len(variant_parts) > 1:
+                        # Check if any significant part (>3 chars) of the name is in text
+                        for part in variant_parts:
+                            if len(part) > 3 and part in text_lower:
+                                # Verify it's a word boundary match (not part of another word)
+                                import re
+                                if re.search(r'\b' + re.escape(part) + r'\b', text_lower):
+                                    people.append(variant)
+                                    people_canonical_found.add(canonical_name)
+                                    break
+                        if canonical_name in people_canonical_found:
+                            break
         
         return people
     

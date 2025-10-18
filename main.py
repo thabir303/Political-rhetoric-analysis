@@ -17,8 +17,18 @@ try:
 except RuntimeError:
     pass  # Already set
 
-from config import settings
-from api import router
+from backend.config import settings
+# Import all routers
+from backend.routes.general import router as general_router
+from backend.routes.articles import router as articles_router
+from backend.routes.scraping import router as scraping_router
+from backend.routes.analysis import router as analysis_router
+from backend.routes.stored_analysis import router as stored_analysis_router
+from backend.routes.parties import router as parties_router
+from backend.routes.figures import router as figures_router
+from backend.routes.topics import router as topics_router
+from backend.routes.keywords import router as keywords_router
+from backend.routes.election import router as election_router
 
 # Configure logging
 logging.basicConfig(
@@ -45,8 +55,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API routes
-app.include_router(router, prefix="/api/v1")
+# Include all routers
+app.include_router(general_router, prefix="/api/v1")
+app.include_router(articles_router, prefix="/api/v1")
+app.include_router(scraping_router, prefix="/api/v1")
+app.include_router(analysis_router, prefix="/api/v1")
+app.include_router(stored_analysis_router, prefix="/api/v1")
+app.include_router(parties_router, prefix="/api/v1")
+app.include_router(figures_router, prefix="/api/v1")
+app.include_router(topics_router)  # Already has /api/v1 prefix
+app.include_router(keywords_router)  # Already has /api/v1 prefix
+app.include_router(election_router)  # Already has /api/v1 prefix
 
 
 @app.on_event("startup")
