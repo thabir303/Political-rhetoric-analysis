@@ -21,7 +21,7 @@ POLITICAL_ENTITIES = {
     "Jamaat-e-Islami": {
         "full_name": "Jamaat-e-Islami Bangladesh",
         "names": [
-            "Jamaat-e-Islami", "Jamaat",
+            "Jamaat-e-Islami", "Jamaat", "JI",  # Added "JI" for backward compatibility
             "জামায়াত", "জামায়াতে ইসলামী"
         ],
         "figures": {

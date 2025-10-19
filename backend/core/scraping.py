@@ -27,9 +27,10 @@ POLITICAL_ENTITIES = {
             "বাংলাদেশ জাতীয়তাবাদী দল", "বিএনপি"
         ],
         "figures": {
-            "Tareq Rahman": ["Tareq Rahman", "Tarek Rahman", "তারেক রহমান", "তারেক"],
-            "Mirza Fakhrul": ["Mirza Fakhrul", "Mirza Fakhrul Islam Alamgir", "মির্জা ফখরুল", "ফখরুল"],
-            "Salahuddin Ahmed": ["Salahuddin Ahmed", "সালাউদ্দিন আহমেদ", "সালাহউদ্দিন", "সালাহউদ্দিন আহমেদ"]
+            # Match LLM's canonical names for consistency
+            "Tareq Rahman": ["Tareq Rahman", "Tarek Rahman", "Tarique Rahman", "তারেক রহমান", "তারেক"],
+            "Mirza Fakhrul Islam Alamgir": ["Mirza Fakhrul Islam Alamgir", "Mirza Fakhrul", "মির্জা ফখরুল ইসলাম আলমগীর", "মির্জা ফখরুল", "ফখরুল"],
+            "Salauddin Ahmed": ["Salauddin Ahmed", "Salahuddin Ahmed", "সালাউদ্দিন আহমেদ", "সালাহউদ্দিন", "সালাহউদ্দিন আহমেদ"]
         }
     },
     "JI": {

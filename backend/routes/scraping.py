@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 
 from backend.models.schemas import ScrapingRequest, ScrapingResponse
+from political_entities_config import normalize_party_name, normalize_figure_name
 
 logger = logging.getLogger(__name__)
 
@@ -144,26 +145,43 @@ async def scrape_newspapers(request: ScrapingRequest):
                         llm_figures = llm_analysis.get('political_figures', [])
                         figure_to_party = llm_analysis.get('figure_to_party_mapping', {})
                         
+                        # Normalize party names to canonical keys (BNP, Jamaat-e-Islami, etc.)
+                        normalized_parties = []
+                        for party in llm_parties:
+                            normalized = normalize_party_name(party)
+                            if normalized and normalized not in normalized_parties:
+                                normalized_parties.append(normalized)
+                        
+                        # Normalize figure names to canonical English names
+                        normalized_figures = []
+                        normalized_figure_to_party = {}
+                        for figure in llm_figures:
+                            canonical_name, party = normalize_figure_name(figure)
+                            if canonical_name and canonical_name not in normalized_figures:
+                                normalized_figures.append(canonical_name)
+                                if party:
+                                    normalized_figure_to_party[canonical_name] = party
+                        
                         # Store parties
-                        if llm_parties:
+                        if normalized_parties:
                             # Store primary party (first one or most relevant)
-                            categorized['political_party'] = llm_parties[0]
-                            categorized['parties'] = ','.join(llm_parties)
+                            categorized['political_party'] = normalized_parties[0]
+                            categorized['parties'] = ','.join(normalized_parties)
                             
                         # Store figures with party affiliations
-                        if llm_figures:
-                            categorized['political_figures'] = ','.join(llm_figures)
-                            categorized['people'] = ','.join(llm_figures)
+                        if normalized_figures:
+                            categorized['political_figures'] = ','.join(normalized_figures)
+                            categorized['people'] = ','.join(normalized_figures)
                             
-                            # Add party affiliation info
-                            if figure_to_party:
+                            # Add party affiliation info (using normalized mapping)
+                            if normalized_figure_to_party:
                                 import json
-                                categorized['people_affiliations'] = json.dumps(figure_to_party)
+                                categorized['people_affiliations'] = json.dumps(normalized_figure_to_party)
                             
                             # If no party detected from content, infer from figures
-                            if not llm_parties and figure_to_party:
+                            if not normalized_parties and normalized_figure_to_party:
                                 # Get party from first figure
-                                first_figure_party = list(figure_to_party.values())[0]
+                                first_figure_party = list(normalized_figure_to_party.values())[0]
                                 categorized['political_party'] = first_figure_party
                                 categorized['parties'] = first_figure_party
                         
@@ -177,7 +195,7 @@ async def scrape_newspapers(request: ScrapingRequest):
                         # Note: We DON'T replace content with summary anymore to preserve both
                         categorized['original_content_length'] = len(article.get('content', ''))
                         
-                        logger.info(f"✅ LLM analyzed: {article.get('title', 'Untitled')[:50]}... | Parties: {llm_parties} | Figures: {llm_figures[:2] if len(llm_figures) > 2 else llm_figures}")
+                        logger.info(f"✅ LLM analyzed: {article.get('title', 'Untitled')[:50]}... | Parties: {llm_parties} → {normalized_parties} | Figures: {llm_figures} → {normalized_figures}")
                     except Exception as llm_e:
                         logger.warning(f"LLM analysis failed for article: {llm_e}")
                 

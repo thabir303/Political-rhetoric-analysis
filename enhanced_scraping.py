@@ -124,13 +124,13 @@ class EnhancedArticleAnalyzer:
     ) -> str:
         """Build Bangla analysis prompt with known entities."""
         
-        # Get known parties and figures
-        known_parties = get_party_list_for_prompt('bangla')
-        known_figures = get_figures_list_for_prompt('bangla')
+        # Get known parties and figures - USE ENGLISH for consistency
+        known_parties = get_party_list_for_prompt('english')
+        known_figures = get_figures_list_for_prompt('english')
         
         context = f"শিরোনাম: {title}\nতারিখ: {date}\n"
-        context += f"\n[পরিচিত রাজনৈতিক দল: {known_parties}]\n"
-        context += f"[পরিচিত রাজনৈতিক ব্যক্তিত্ব: {known_figures}]\n"
+        context += f"\n[Known Political Parties: {known_parties}]\n"
+        context += f"[Known Political Figures: {known_figures}]\n"
         
         prompt = f"""নিচের বাংলাদেশী রাজনৈতিক আর্টিকেলটি বিশ্লেষণ করুন এবং নিম্নলিখিত তথ্য প্রদান করুন:
 
@@ -151,14 +151,16 @@ class EnhancedArticleAnalyzer:
 [৩-৫টি প্রধান বিষয়, কমা দিয়ে আলাদা করুন]
 
 4. POLITICAL_PARTIES:
-[আর্টিকেলে উল্লেখিত সকল রাজনৈতিক দল/সংগঠনের নাম। উপরে দেওয়া পরিচিত দলের তালিকা থেকে খুঁজে বের করুন এবং EXACT নাম ব্যবহার করুন। উদাহরণ: বিএনপি, আওয়ামী লীগ, জামায়াতে ইসলামী, অন্তর্বর্তী সরকার ইত্যাদি। কমা দিয়ে আলাদা করুন। যদি কোনো দল উল্লেখ না থাকে তাহলে "None" লিখুন।
+[আর্টিকেলে উল্লেখিত সকল রাজনৈতিক দল/সংগঠনের নাম। উপরে দেওয়া Known Political Parties তালিকা থেকে খুঁজে বের করুন এবং EXACT ENGLISH নাম ব্যবহার করুন। উদাহরণ: BNP, Awami League, Jamaat-e-Islami, Interim Government ইত্যাদি। কমা দিয়ে আলাদা করুন। যদি কোনো দল উল্লেখ না থাকে তাহলে "None" লিখুন।
 
-⚠️ IMPORTANT: পরিচিত দলের তালিকায় থাকা নাম ব্যবহার করুন। নতুন নাম তৈরি করবেন না।]
+⚠️ CRITICAL: অবশ্যই ইংরেজি নাম ব্যবহার করুন যা উপরের তালিকায় আছে। বাংলা নাম ব্যবহার করবেন না। নতুন নাম তৈরি করবেন না।
+⚠️ STRICT: শুধুমাত্র Known Political Parties তালিকায় যে দলগুলো আছে সেগুলোই উল্লেখ করুন। তালিকার বাইরের কোনো দল উল্লেখ করবেন না।]
 
 5. POLITICAL_FIGURES:
-[আর্টিকেলে উল্লেখিত সকল রাজনৈতিক ব্যক্তিত্ব/নেতাদের নাম। উপরে দেওয়া পরিচিত ব্যক্তিত্বের তালিকা থেকে খুঁজে বের করুন এবং EXACT নাম ব্যবহার করুন। উদাহরণ: তারেক রহমান, মির্জা ফখরুল, ড. মুহাম্মদ ইউনূস ইত্যাদি। কমা দিয়ে আলাদা করুন। যদি কেউ উল্লেখ না থাকে তাহলে "None" লিখুন।
+[আর্টিকেলে উল্লেখিত সকল রাজনৈতিক ব্যক্তিত্ব/নেতাদের নাম। উপরে দেওয়া Known Political Figures তালিকা থেকে খুঁজে বের করুন এবং EXACT ENGLISH নাম ব্যবহার করুন। উদাহরণ: Tareq Rahman, Mirza Fakhrul Islam Alamgir, Dr. Muhammad Yunus ইত্যাদি। কমা দিয়ে আলাদা করুন। যদি কেউ উল্লেখ না থাকে তাহলে "None" লিখুন।
 
-⚠️ IMPORTANT: পরিচিত ব্যক্তিত্বের তালিকায় থাকা নাম ব্যবহার করুন। নতুন নাম তৈরি করবেন না।]
+⚠️ CRITICAL: অবশ্যই ইংরেজি নাম ব্যবহার করুন যা উপরের তালিকায় আছে। বাংলা নাম ব্যবহার করবেন না। নতুন নাম তৈরি করবেন না। সম্পূর্ণ নাম লিখুন (যেমন: Mirza Fakhrul Islam Alamgir, NOT মির্জা ফখরুল)।
+⚠️ STRICT: শুধুমাত্র Known Political Figures তালিকায় যে ব্যক্তিরা আছে সেগুলোই উল্লেখ করুন। তালিকার বাইরের কোনো ব্যক্তি উল্লেখ করবেন না। যদি কোনো রাজনৈতিক ব্যক্তিত্ব তালিকায় না থাকে, তাহলে তাকে উল্লেখ করবেন না।]
 
 6. ELECTION_2026_IMPACT:
 [বাংলাদেশের ২০২৬ সালের নির্বাচনে এই আর্টিকেল/বক্তব্যের সম্ভাব্য প্রভাব কী হতে পারে? যদি কোনো প্রভাব থাকে তাহলে ২-৩ বাক্যে ব্যাখ্যা করুন। যদি সরাসরি কোনো প্রভাব না থাকে তাহলে "কোনো সরাসরি প্রভাব নেই" লিখুন]
@@ -206,12 +208,14 @@ Please respond in the following format (in English):
 4. POLITICAL_PARTIES:
 [List all political parties/organizations mentioned in the article. Find them from the Known Political Parties list above and use EXACT names. Examples: BNP, Awami League, Jamaat-e-Islami, Interim Government, etc. Separate by commas. If no parties are mentioned, write "None".
 
-⚠️ IMPORTANT: Use names from the Known Political Parties list only. Do not create new names.]
+⚠️ IMPORTANT: Use names from the Known Political Parties list only. Do not create new names.
+⚠️ STRICT: ONLY mention parties that are in the Known Political Parties list. Do not mention any party outside this list.]
 
 5. POLITICAL_FIGURES:
-[List all political figures/leaders mentioned in the article. Find them from the Known Political Figures list above and use EXACT names. Examples: Tareq Rahman, Mirza Fakhrul, Dr. Muhammad Yunus, etc. Separate by commas. If no figures are mentioned, write "None".
+[List all political figures/leaders mentioned in the article. Find them from the Known Political Figures list above and use EXACT FULL ENGLISH names. Examples: Tareq Rahman, Mirza Fakhrul Islam Alamgir, Dr. Muhammad Yunus, etc. Separate by commas. If no figures are mentioned, write "None".
 
-⚠️ IMPORTANT: Use names from the Known Political Figures list only. Do not create new names.]
+⚠️ CRITICAL: Use COMPLETE English names from the Known Political Figures list EXACTLY as shown. Do not abbreviate. Do not use Bangla names. Do not create new names.
+⚠️ STRICT: ONLY mention figures that are in the Known Political Figures list. Do not mention any person outside this list. If a political figure is not in the list, do not include them.]
 
 6. ELECTION_2026_IMPACT:
 [What is the potential impact of this article/speech on Bangladesh's 2026 election? If there is an impact, explain in 2-3 sentences. If there is no direct impact, write "No direct impact"]
@@ -249,40 +253,77 @@ Response:"""
             
             for line in lines:
                 line = line.strip()
+                if not line:
+                    continue
                 
-                # Check for section headers
-                if 'SUMMARY' in line.upper() or 'সারসংক্ষেপ' in line:
+                # Check for section headers - also extract inline content after colon
+                # Only detect headers if line starts with number (1., 2., etc.)
+                section_detected = False
+                remaining_content = ""
+                is_header_line = any(line.startswith(f'{i}.') for i in range(1, 10))
+                
+                if is_header_line and ('SUMMARY' in line.upper() or 'সারসংক্ষেপ' in line):
                     if current_section and section_content:
                         self._process_section(result, current_section, section_content)
                     current_section = 'summary'
                     section_content = []
-                elif 'KEYWORDS' in line.upper() or 'কীওয়ার্ড' in line:
+                    section_detected = True
+                    # Extract content after colon if present
+                    if ':' in line:
+                        remaining_content = line.split(':', 1)[1].strip()
+                        
+                elif is_header_line and ('KEYWORDS' in line.upper() or 'কীওয়ার্ড' in line):
                     if current_section and section_content:
                         self._process_section(result, current_section, section_content)
                     current_section = 'keywords'
                     section_content = []
-                elif 'TOPICS' in line.upper() or 'বিষয়' in line:
+                    section_detected = True
+                    if ':' in line:
+                        remaining_content = line.split(':', 1)[1].strip()
+                        
+                elif is_header_line and ('TOPICS' in line.upper() or 'বিষয়' in line):
                     if current_section and section_content:
                         self._process_section(result, current_section, section_content)
                     current_section = 'topics'
                     section_content = []
-                elif 'POLITICAL_PARTIES' in line.upper() or 'রাজনৈতিক দল' in line:
+                    section_detected = True
+                    if ':' in line:
+                        remaining_content = line.split(':', 1)[1].strip()
+                        
+                elif is_header_line and ('POLITICAL_PARTIES' in line.upper() or 'রাজনৈতিক দল' in line):
                     if current_section and section_content:
                         self._process_section(result, current_section, section_content)
                     current_section = 'political_parties'
                     section_content = []
-                elif 'POLITICAL_FIGURES' in line.upper() or 'রাজনৈতিক ব্যক্তিত্ব' in line or 'নেতা' in line:
+                    section_detected = True
+                    if ':' in line:
+                        remaining_content = line.split(':', 1)[1].strip()
+                        
+                elif is_header_line and ('POLITICAL_FIGURES' in line.upper() or 'রাজনৈতিক ব্যক্তিত্ব' in line or 'নেতা' in line):
                     if current_section and section_content:
                         self._process_section(result, current_section, section_content)
                     current_section = 'political_figures'
                     section_content = []
-                elif 'ELECTION' in line.upper() or 'নির্বাচন' in line or 'IMPACT' in line.upper() or 'প্রভাব' in line:
+                    section_detected = True
+                    if ':' in line:
+                        remaining_content = line.split(':', 1)[1].strip()
+                        
+                elif is_header_line and (('ELECTION' in line.upper() and 'IMPACT' in line.upper()) or 'নির্বাচন' in line or 'প্রভাব' in line):
                     if current_section and section_content:
                         self._process_section(result, current_section, section_content)
                     current_section = 'election_impact'
                     section_content = []
-                elif line and not line.startswith(('1.', '2.', '3.', '4.', '-', '*')):
-                    # Content line
+                    section_detected = True
+                    if ':' in line:
+                        remaining_content = line.split(':', 1)[1].strip()
+                
+                # Add content - either remaining from header line or full line
+                if section_detected:
+                    # If header had content after colon, add it
+                    if remaining_content and remaining_content.lower() != 'none':
+                        section_content.append(remaining_content)
+                elif current_section and line and not is_header_line:
+                    # Regular content line - add to current section
                     section_content.append(line)
             
             # Process last section
@@ -325,19 +366,21 @@ Response:"""
             result['political_parties'] = normalized_parties
             
         elif section == 'political_figures':
-            # Split by commas, clean, and normalize with party detection
+            # Split by commas, clean
+            # LLM now returns English canonical names directly, so we just validate and get party
             raw_figures = [f.strip() for f in text.split(',') if f.strip() and f.strip().lower() != 'none']
-            normalized_figures = []
+            validated_figures = []
             figure_to_party = {}
             
             for figure in raw_figures:
+                # Still normalize to handle any variations, but LLM should give us correct names
                 normalized, party = normalize_figure_name(figure)
-                if normalized and normalized not in normalized_figures:
-                    normalized_figures.append(normalized)
+                if normalized and normalized not in validated_figures:
+                    validated_figures.append(normalized)
                     if party:
                         figure_to_party[normalized] = party
             
-            result['political_figures'] = normalized_figures
+            result['political_figures'] = validated_figures
             result['figure_to_party_mapping'] = figure_to_party  # For storage routing
         elif section == 'election_impact':
             result['election_2026_impact'] = text

@@ -1,24 +1,87 @@
 """
-Political Parties Endpoint - Uses strict POLITICAL_ENTITIES mapping
+Political Parties Endpoint - Uses LLM's POLITICAL_ENTITIES for consistency
 """
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Response
 from typing import List, Dict, Any, Optional
 import logging
 
 from backend.models.schemas import PartiesListResponse, PartyResponse, FigureProfileResponse, ArticleSummary
-from backend.core.scraping import POLITICAL_ENTITIES
+
+# Import normalization function and POLITICAL_ENTITIES from political_entities_config (LLM config)
+try:
+    from political_entities_config import normalize_figure_name as normalize_figure_from_llm, POLITICAL_ENTITIES as LLM_POLITICAL_ENTITIES, normalize_party_name
+    USE_LLM_CONFIG = True
+    POLITICAL_ENTITIES = LLM_POLITICAL_ENTITIES  # Use LLM's config as single source of truth
+    logger = logging.getLogger(__name__)
+    logger.info("Using LLM's political_entities_config for parties and figures")
+except ImportError:
+    from backend.core.scraping import POLITICAL_ENTITIES
+    USE_LLM_CONFIG = False
+    normalize_party_name = lambda x: x  # Fallback: no normalization
+    logger = logging.getLogger(__name__)
+    logger.warning("Could not import political_entities_config, using backend's POLITICAL_ENTITIES")
+
+USE_LLM_NORMALIZATION = USE_LLM_CONFIG  # Backward compatibility
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/parties", tags=["Political Parties"])
 
 
+def get_canonical_name(name_variant: str) -> Optional[str]:
+    """
+    Convert any name variant (Bangla or English) to canonical English name.
+    
+    Uses political_entities_config's normalize_figure_name if available (for LLM compatibility),
+    otherwise falls back to backend's POLITICAL_ENTITIES.
+    
+    Args:
+        name_variant: Any variant of a political figure's name
+        
+    Returns:
+        Canonical English name or None if not found
+    """
+    # Try LLM's normalization first (if available)
+    if USE_LLM_NORMALIZATION:
+        try:
+            canonical_name, party = normalize_figure_from_llm(name_variant)
+            if canonical_name and canonical_name != name_variant:
+                return canonical_name
+            # If normalization returns same name, it might not be found
+            # Fall through to backend's method
+        except Exception as e:
+            logger.warning(f"LLM normalization failed for '{name_variant}': {e}")
+    
+    # Fallback to backend's POLITICAL_ENTITIES
+    name_lower = name_variant.lower().strip()
+    
+    # Search through all parties and figures
+    for party_key, party_data in POLITICAL_ENTITIES.items():
+        figures_dict = party_data.get('figures', {})
+        for canonical_name, variants in figures_dict.items():
+            # Check if name_variant matches any variant (case-insensitive)
+            for variant in variants:
+                if variant.lower() == name_lower:
+                    return canonical_name
+    
+    return None
+
+
 @router.get(
     "/",
     response_model=PartiesListResponse,
-    summary="Get list of political parties with their figures"
+    summary="Get list of political parties with their figures",
+    responses={
+        200: {
+            "headers": {
+                "Cache-Control": {"description": "no-cache, no-store, must-revalidate"},
+                "Pragma": {"description": "no-cache"},
+                "Expires": {"description": "0"}
+            }
+        }
+    }
 )
-async def get_parties():
+async def get_parties(response: Response):
     """
     Get list of political parties with associated figures.
     
@@ -26,8 +89,13 @@ async def get_parties():
     which figures were actually detected in stored articles.
     
     Returns:
-        PartiesListResponse with parties and their canonical figures
+        PartiesListResponse with parties and their canonical English figures
     """
+    # Disable caching to ensure frontend always gets fresh data
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
     try:
         from backend.core.vector_db import VectorDatabase
         import json
@@ -62,40 +130,64 @@ async def get_parties():
                 
                 # Count articles per party and track figures
                 for party in parties:
-                    party_counts[party] = party_counts.get(party, 0) + 1
+                    # Normalize party name to match POLITICAL_ENTITIES keys
+                    # This handles cases like "JI" → "Jamaat-e-Islami"
+                    normalized_party = normalize_party_name(party)
                     
-                    if party not in party_figures_found:
-                        party_figures_found[party] = set()
+                    party_counts[normalized_party] = party_counts.get(normalized_party, 0) + 1
                     
-                    # Add figures associated with this party
+                    if normalized_party not in party_figures_found:
+                        party_figures_found[normalized_party] = set()
+                    
+                    # Add figures associated with this party (convert to canonical names)
                     for person in people:
-                        if people_affiliations.get(person) == party:
-                            party_figures_found[party].add(person)
+                        # Check if person belongs to this party (compare with original party name)
+                        if people_affiliations.get(person) == party or people_affiliations.get(person) == normalized_party:
+                            # Convert to canonical English name
+                            canonical_name = get_canonical_name(person)
+                            if canonical_name:
+                                party_figures_found[normalized_party].add(canonical_name)
+                            else:
+                                # Log if we couldn't find canonical name
+                                logger.warning(f"No canonical name found for: {person}")
         
-        # Build response using POLITICAL_ENTITIES as the authoritative source
+        # Build response - show ALL parties found in database, with POLITICAL_ENTITIES details if available
         parties_list = []
+        
+        # First, add parties from POLITICAL_ENTITIES that have articles
         for party_key, party_data in POLITICAL_ENTITIES.items():
-            # Get canonical figure names from POLITICAL_ENTITIES (dict keys are canonical English names)
-            figures_dict = party_data.get("figures", {})
-            canonical_figures = list(figures_dict.keys())  # Extract canonical English names
-            
-            # Get article count for this party
             article_count = party_counts.get(party_key, 0)
             
-            # Get full party name
-            full_name = party_data.get("full_name", party_key)
-            
-            parties_list.append(PartyResponse(
-                name=party_key,
-                full_name=full_name,
-                figures=canonical_figures,  # Always use canonical English names
-                total_articles=article_count
-            ))
+            # Only include if we found articles
+            if article_count > 0:
+                # Get canonical figure names (only those found in articles)
+                canonical_figures = sorted(list(party_figures_found.get(party_key, set())))
+                
+                # Get full party name (from 'full_name' or first name in 'names' list, or key as fallback)
+                full_name = party_data.get("full_name") or (party_data.get("names", [party_key])[0] if party_data.get("names") else party_key)
+                
+                parties_list.append(PartyResponse(
+                    name=party_key,
+                    full_name=full_name,
+                    figures=canonical_figures,  # ONLY canonical English names
+                    total_articles=article_count
+                ))
+        
+        # Also check for any parties in DB that aren't in POLITICAL_ENTITIES (shouldn't happen but for robustness)
+        for db_party in party_counts.keys():
+            if db_party not in [p.name for p in parties_list]:
+                logger.warning(f"Found party in DB not in config: {db_party}")
+                parties_list.append(PartyResponse(
+                    name=db_party,
+                    full_name=db_party,  # Use key as full name
+                    figures=sorted(list(party_figures_found.get(db_party, set()))),
+                    total_articles=party_counts.get(db_party, 0)
+                ))
         
         # Sort by article count (most prominent first)
         parties_list.sort(key=lambda x: x.total_articles, reverse=True)
         
-        logger.info(f"Retrieved {len(parties_list)} political parties")
+        logger.info(f"Retrieved {len(parties_list)} political parties with canonical names")
         
         return PartiesListResponse(
             parties=parties_list,
@@ -313,6 +405,10 @@ async def get_figure_profile(
         # Filter articles that mention this figure
         matching_articles = []
         
+        # Get all name variants for this figure to match against stored data
+        figure_variants = party_figures_dict.get(figure_name, [])
+        figure_variants_lower = [v.lower() for v in figure_variants]
+        
         for i, (metadata, document, doc_id) in enumerate(zip(
             all_results.get("metadatas", []),
             all_results.get("documents", []),
@@ -325,45 +421,61 @@ async def get_figure_profile(
             except:
                 people_affiliations = {}
             
-            # Check if this figure is mentioned and affiliated with this party
-            if figure_name in people_affiliations and people_affiliations[figure_name] == party_name:
-                article_date = metadata.get("date", "")
+            # Check if this figure is mentioned (match against any variant)
+            # people_affiliations has format: {detected_name: party}
+            # We need to check if any detected_name maps to our figure_name
+            figure_found = False
+            for detected_name, detected_party in people_affiliations.items():
+                # Check if detected_name is a variant of our figure
+                detected_canonical = get_canonical_name(detected_name)
+                if detected_canonical == figure_name and detected_party == party_name:
+                    figure_found = True
+                    break
+            
+            if not figure_found:
+                continue
                 
-                # Apply date filtering if provided
-                if date_from or date_to:
-                    try:
-                        # Parse article date (format: "2025-10-11")
-                        article_date_obj = datetime.strptime(article_date, '%Y-%m-%d')
-                        
-                        if date_from:
-                            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
-                            if article_date_obj < date_from_obj:
-                                continue
-                        
-                        if date_to:
-                            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
-                            if article_date_obj > date_to_obj:
-                                continue
-                    except ValueError:
-                        # Skip articles with invalid dates
-                        continue
-                
-                matching_articles.append({
-                    "id": doc_id,
-                    "title": metadata.get("title", "No title"),
-                    "date": article_date,
-                    "source": metadata.get("source", "Unknown"),
-                    "content": document[:500] if document else "",  # Preview
-                    "summary": metadata.get("summary", ""),  # LLM-generated summary
-                    "topics": metadata.get("topics", ""),  # LLM-generated topics
-                    "url": metadata.get("url", ""),
-                    "keywords": metadata.get("keywords", ""),
-                    "parties": metadata.get("parties", ""),
-                    "people": metadata.get("people", ""),
-                    "has_election_impact": metadata.get("has_election_impact", "false"),
-                    "election_impact_description": metadata.get("election_impact_description", ""),
-                    "date_ts": int(metadata.get("date_ts", 0))
-                })
+            article_date = metadata.get("date", "")
+            
+            # Apply date filtering if provided
+            if date_from or date_to:
+                try:
+                    # Parse article date (format: "2025-10-11")
+                    article_date_obj = datetime.strptime(article_date, '%Y-%m-%d')
+                    
+                    if date_from:
+                        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
+                        if article_date_obj < date_from_obj:
+                            continue
+                    
+                    if date_to:
+                        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
+                        if article_date_obj > date_to_obj:
+                            continue
+                except ValueError:
+                    # Skip articles with invalid dates
+                    continue
+            
+            # Prefer summary over full content
+            llm_summary = metadata.get("summary", "")
+            content_preview = llm_summary if llm_summary else (document[:500] if document else "")
+            
+            matching_articles.append({
+                "id": doc_id,
+                "title": metadata.get("title", "No title"),
+                "date": article_date,
+                "source": metadata.get("source", "Unknown"),
+                "content": content_preview,  # Use LLM summary if available, else preview
+                "summary": llm_summary,  # LLM-generated summary
+                "topics": metadata.get("topics", ""),  # LLM-generated topics
+                "url": metadata.get("url", ""),
+                "keywords": metadata.get("keywords", ""),
+                "parties": metadata.get("parties", ""),
+                "people": metadata.get("people", ""),
+                "has_election_impact": metadata.get("has_election_impact", "false"),
+                "election_impact_description": metadata.get("election_impact_description", ""),
+                "date_ts": int(metadata.get("date_ts", 0))
+            })
         
         # Sort by date (newest first)
         matching_articles.sort(key=lambda x: (x["date_ts"], x["id"]), reverse=True)
@@ -374,13 +486,16 @@ async def get_figure_profile(
         # Convert to ArticleSummary format
         articles_list = []
         for article in matching_articles:
+            # Always prefer LLM-generated summary over content
+            display_summary = article.get("summary", "") or article.get("content", "")
+            
             articles_list.append(ArticleSummary(
                 id=article["id"],
                 title=article["title"],
                 date=article["date"],
                 source=article["source"],
                 similarity=1.0,  # All articles are relevant since they mention the figure
-                summary=article.get("summary", article["content"]),  # Use LLM summary if available
+                summary=display_summary,  # Use LLM summary (already set in content field)
                 key_points=[],
                 stance_analysis=None,
                 keywords=article["keywords"].split(",") if article["keywords"] else [],
@@ -540,13 +655,17 @@ async def get_party_profile(
                 elif regular_keywords:
                     keywords_str = regular_keywords
                 
+                # Prefer LLM summary over full content
+                llm_summary = metadata.get("summary", "")
+                content_to_store = llm_summary if llm_summary else (document[:300] + "..." if document and len(document) > 300 else (document or ""))
+                
                 matching_articles.append({
                     "id": doc_id,
                     "title": metadata.get("title", "No title"),
                     "date": article_date,
                     "source": metadata.get("source", "Unknown"),
-                    "content": preview,  # Preview for list view
-                    "summary": metadata.get("summary", ""),  # LLM-generated summary
+                    "content": content_to_store,  # Use LLM summary if available, else preview
+                    "summary": llm_summary,  # LLM-generated summary
                     "topics": metadata.get("topics", ""),  # LLM-generated topics (comma-separated)
                     "url": article_url,
                     "keywords": keywords_str,
@@ -567,13 +686,16 @@ async def get_party_profile(
         # Convert to ArticleSummary format
         articles_list = []
         for article in matching_articles:
+            # Use LLM summary (already set in content field if available)
+            display_summary = article.get("summary", "") or article.get("content", "")
+            
             articles_list.append(ArticleSummary(
                 id=article["id"],
                 title=article["title"],
                 date=article["date"],
                 source=article["source"],
                 similarity=1.0,
-                summary=article.get("summary", article["content"]),  # Use LLM summary if available
+                summary=display_summary,  # LLM summary preferred
                 key_points=[],
                 stance_analysis=None,
                 keywords=article["keywords"].split(",") if article["keywords"] else [],
