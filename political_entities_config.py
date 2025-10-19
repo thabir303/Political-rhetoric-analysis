@@ -4,6 +4,9 @@ Political Entities Configuration
 Defines known political parties and their key figures for Bangladesh.
 Used by LLM for accurate entity detection.
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 POLITICAL_ENTITIES = {
     "BNP": {
@@ -22,7 +25,7 @@ POLITICAL_ENTITIES = {
         "full_name": "Jamaat-e-Islami Bangladesh",
         "names": [
             "Jamaat-e-Islami", "Jamaat", "JI",  # Added "JI" for backward compatibility
-            "জামায়াত", "জামায়াতে ইসলামী"
+            "জামায়াত", "জামায়াতে ইসলামী", "জামায়াতে ইসলামি", "জামায়াত ই ইসলামী"
         ],
         "figures": {
             "Shafiqur Rahman": ["শফিকুর রহমান", "Shafiqur Rahman"],
@@ -34,7 +37,7 @@ POLITICAL_ENTITIES = {
         "full_name": "National Citizens Party",
         "names": [
             "National Citizens Party", "NCP",
-            "জাতীয় নাগরিক পার্টি"
+            "জাতীয় নাগরিক পার্টি", "জাতীয় নাগরিক পার্টি (এনসিপি)"
         ],
         "figures": {
             "Nahid Islam": ["নাহিদ ইসলাম", "Nahid Islam"],
@@ -172,9 +175,11 @@ def normalize_party_name(detected_name: str) -> str:
         # Check against all known names
         for name in entity['names']:
             if detected_lower == name.lower() or detected_lower in name.lower() or name.lower() in detected_lower:
+                logger.info(f"Normalized '{detected_name}' → '{key}' (matched '{name}')")
                 return key
     
     # Return as-is if no match found
+    logger.warning(f"No normalization match for party '{detected_name}'")
     return detected_name
 
 def normalize_figure_name(detected_name: str) -> tuple:

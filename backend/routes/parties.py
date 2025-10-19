@@ -133,6 +133,8 @@ async def get_parties(response: Response):
                     # Normalize party name to match POLITICAL_ENTITIES keys
                     # This handles cases like "JI" → "Jamaat-e-Islami"
                     normalized_party = normalize_party_name(party)
+                    if party != normalized_party:
+                        logger.info(f"Normalized '{party}' → '{normalized_party}'")
                     
                     party_counts[normalized_party] = party_counts.get(normalized_party, 0) + 1
                     
@@ -150,6 +152,9 @@ async def get_parties(response: Response):
                             else:
                                 # Log if we couldn't find canonical name
                                 logger.warning(f"No canonical name found for: {person}")
+        
+        # Log party counts after normalization
+        logger.info(f"Party counts after normalization: {dict(sorted(party_counts.items(), key=lambda x: x[1], reverse=True))}")
         
         # Build response - show ALL parties found in database, with POLITICAL_ENTITIES details if available
         parties_list = []
@@ -186,6 +191,10 @@ async def get_parties(response: Response):
         
         # Sort by article count (most prominent first)
         parties_list.sort(key=lambda x: x.total_articles, reverse=True)
+        
+        # Filter out any Bangla party names (they should have been normalized)
+        # This is a safety check to ensure only English names are returned
+        parties_list = [p for p in parties_list if all(ord(c) < 128 for c in p.name)]
         
         logger.info(f"Retrieved {len(parties_list)} political parties with canonical names")
         
