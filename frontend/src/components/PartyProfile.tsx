@@ -306,7 +306,7 @@ export default function PartyProfile() {
             </div>
 
             {/* AI Keywords */}
-            {profile.ai_keywords && profile.ai_keywords.length > 0 && (
+            {/* {profile.ai_keywords && profile.ai_keywords.length > 0 && (
               <div className="mb-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                   <svg className="h-4 w-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
@@ -325,7 +325,7 @@ export default function PartyProfile() {
                   ))}
                 </div>
               </div>
-            )}
+            )} */}
 
             {/* AI Topics */}
             {profile.ai_topics && profile.ai_topics.length > 0 && (
@@ -454,8 +454,7 @@ export default function PartyProfile() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Keywords and Topics */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Top Keywords */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
+            {/* <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -476,7 +475,7 @@ export default function PartyProfile() {
               ) : (
                 <p className="text-gray-500 text-sm">No keywords available</p>
               )}
-            </div>
+            </div> */}
 
             {/* Topics */}
             <div className="bg-white rounded-xl shadow-lg p-6">

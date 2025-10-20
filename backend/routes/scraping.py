@@ -102,109 +102,33 @@ async def scrape_newspapers(request: ScrapingRequest):
         
         logger.info(f"Total articles scraped: {len(all_articles)}")
         
-        # Step 2: Categorization + LLM Analysis
-        logger.info("Starting categorization and LLM analysis...")
+        # Step 2: Categorization ONLY (NO LLM Analysis)
+        logger.info("Starting categorization (NO LLM analysis during scraping)...")
         categorizer = ArticleCategorizer()
         categorized_articles = []
         
-        # Import LLM analyzer
-        try:
-            from enhanced_scraping import EnhancedArticleAnalyzer
-            llm_analyzer = EnhancedArticleAnalyzer()
-            use_llm = True
-            logger.info("✅ LLM Analysis enabled")
-        except Exception as e:
-            logger.warning(f"⚠️ LLM Analysis not available: {e}")
-            use_llm = False
-        
         for article in all_articles:
             try:
-                # Basic categorization
+                # Basic categorization - detect parties and figures
                 categorization = categorizer.categorize_article(article)
                 categorized = article.copy()
                 categorized.update(categorization)
                 
-                # Enhanced LLM Analysis (if available)
-                if use_llm:
-                    try:
-                        llm_analysis = llm_analyzer.analyze_article(
-                            article_content=article.get('content', ''),
-                            article_title=article.get('title', ''),
-                            article_date=article.get('date', ''),
-                            political_party=None,  # Let LLM detect
-                            political_figure=None  # Let LLM detect
-                        )
-                        
-                        # Add LLM analysis to article (REPLACES manual categorization)
-                        categorized['summary'] = llm_analysis.get('summary', '')
-                        categorized['keywords'] = ','.join(llm_analysis.get('keywords', []))
-                        categorized['topics'] = ','.join(llm_analysis.get('topics', []))
-                        
-                        # LLM-detected political entities (REPLACES manual detection)
-                        llm_parties = llm_analysis.get('political_parties', [])
-                        llm_figures = llm_analysis.get('political_figures', [])
-                        figure_to_party = llm_analysis.get('figure_to_party_mapping', {})
-                        
-                        # Normalize party names to canonical keys (BNP, Jamaat-e-Islami, etc.)
-                        normalized_parties = []
-                        for party in llm_parties:
-                            normalized = normalize_party_name(party)
-                            if normalized and normalized not in normalized_parties:
-                                normalized_parties.append(normalized)
-                        
-                        # Normalize figure names to canonical English names
-                        normalized_figures = []
-                        normalized_figure_to_party = {}
-                        for figure in llm_figures:
-                            canonical_name, party = normalize_figure_name(figure)
-                            if canonical_name and canonical_name not in normalized_figures:
-                                normalized_figures.append(canonical_name)
-                                if party:
-                                    normalized_figure_to_party[canonical_name] = party
-                        
-                        # Store parties
-                        if normalized_parties:
-                            # Store primary party (first one or most relevant)
-                            categorized['political_party'] = normalized_parties[0]
-                            categorized['parties'] = ','.join(normalized_parties)
-                            
-                        # Store figures with party affiliations
-                        if normalized_figures:
-                            categorized['political_figures'] = ','.join(normalized_figures)
-                            categorized['people'] = ','.join(normalized_figures)
-                            
-                            # Add party affiliation info (using normalized mapping)
-                            if normalized_figure_to_party:
-                                import json
-                                categorized['people_affiliations'] = json.dumps(normalized_figure_to_party)
-                            
-                            # If no party detected from content, infer from figures
-                            if not normalized_parties and normalized_figure_to_party:
-                                # Get party from first figure
-                                first_figure_party = list(normalized_figure_to_party.values())[0]
-                                categorized['political_party'] = first_figure_party
-                                categorized['parties'] = first_figure_party
-                        
-                        # Election impact
-                        categorized['has_election_impact'] = llm_analysis.get('has_election_impact', False)
-                        categorized['election_impact_description'] = llm_analysis.get('election_2026_impact', '')
-                        
-                        # Keep both summary and content fields
-                        # summary: LLM-generated summary (stored in metadata)
-                        # content: Full article content (stored as document for embedding)
-                        # Note: We DON'T replace content with summary anymore to preserve both
-                        categorized['original_content_length'] = len(article.get('content', ''))
-                        
-                        logger.info(f"✅ LLM analyzed: {article.get('title', 'Untitled')[:50]}... | Parties: {llm_parties} → {normalized_parties} | Figures: {llm_figures} → {normalized_figures}")
-                    except Exception as llm_e:
-                        logger.warning(f"LLM analysis failed for article: {llm_e}")
+                # NO LLM ANALYSIS HERE - only categorization
+                # LLM summary will be generated on-demand when user clicks "Generate Summary"
                 
                 categorized_articles.append(categorized)
+                
+                # Log categorization result
+                parties = categorized.get('parties', '')
+                people = categorized.get('people', '')
+                logger.info(f"✅ Categorized: {article.get('title', 'Untitled')[:50]}... | Parties: {parties} | Figures: {people}")
+                
             except Exception as e:
-                logger.error(f"Error processing article: {e}")
+                logger.error(f"Error categorizing article: {e}")
                 continue
         
-        logger.info(f"Processed {len(categorized_articles)} articles (with LLM analysis: {use_llm})")
+        logger.info(f"Categorized {len(categorized_articles)} articles (NO LLM analysis)")
         
         # Step 3: Generate embeddings
         logger.info("Generating embeddings...")
@@ -250,9 +174,7 @@ async def scrape_newspapers(request: ScrapingRequest):
         
         processing_time = time.time() - start_time
         
-        success_message = f"Successfully scraped and stored {stored_count} articles"
-        if use_llm:
-            success_message += " with LLM analysis (summary, keywords, topics, election impact)"
+        success_message = f"Successfully scraped and stored {stored_count} articles (categorized only, LLM summary available on-demand)"
         
         return ScrapingResponse(
             status="completed",

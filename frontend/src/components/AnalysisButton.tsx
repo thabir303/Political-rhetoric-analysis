@@ -27,6 +27,14 @@ interface AnalysisResult {
     sources: string[]
     sample_titles: string[]
     associated_parties?: string[]
+    comprehensive_summary?: string  // NEW: Summary of all article summaries
+    article_summaries?: Array<{
+      title: string
+      date: string
+      source: string
+      summary: string
+      url: string
+    }>
   }
   processing_time: number
 }
@@ -228,6 +236,71 @@ export function AnalysisButton({ type, name, party, className = '' }: AnalysisBu
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* Article Summaries - NEW SECTION */}
+              {analysisResult.analysis.article_summaries && analysisResult.analysis.article_summaries.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="text-green-600">📋</span>
+                    Article Summaries ({analysisResult.analysis.article_summaries.length} articles)
+                  </h3>
+                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                    {analysisResult.analysis.article_summaries.map((article, index) => (
+                      <div key={index} className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-lg border border-green-200 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-semibold text-gray-800 flex-1 pr-2">
+                            {index + 1}. {article.title}
+                          </h4>
+                          <span className="text-xs text-gray-500 whitespace-nowrap">{article.date}</span>
+                        </div>
+                        <p className="text-xs text-gray-600 mb-2 flex items-center gap-1">
+                          <span className="font-medium">Source:</span> {article.source}
+                        </p>
+                        <div className="bg-white bg-opacity-70 p-3 rounded border border-green-100">
+                          <p className="text-sm text-gray-700 leading-relaxed">
+                            {article.summary}
+                          </p>
+                        </div>
+                        {article.url && (
+                          <a
+                            href={article.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800 mt-2 inline-flex items-center gap-1"
+                          >
+                            <span>Read full article</span>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Comprehensive Summary of All Articles - NEW SECTION */}
+              {analysisResult.analysis.comprehensive_summary && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="text-orange-600">📊</span>
+                    Comprehensive Summary (Summary of All Article Summaries)
+                  </h3>
+                  <div className="bg-gradient-to-br from-orange-50 via-yellow-50 to-orange-50 p-5 rounded-lg border-2 border-orange-200 shadow-sm">
+                    <div className="prose prose-sm max-w-none text-gray-800">
+                      <p className="text-sm text-gray-600 mb-3 italic">
+                        This is a comprehensive summary combining insights from all {analysisResult.analysis.article_summaries?.length || 0} individual article summaries.
+                      </p>
+                      <div className="bg-white bg-opacity-80 p-4 rounded border border-orange-100">
+                        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                          {analysisResult.analysis.comprehensive_summary}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

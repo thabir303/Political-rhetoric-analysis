@@ -1,14 +1,31 @@
 {
-  "parties": {},
+  "parties": {
+    "BNP": {
+      "keywords": [],
+      "topics": [],
+      "summary": "",
+      "articles_analyzed": 10,
+      "last_updated": "2025-10-19T16:52:33.302539",
+      "timestamp": 1760871153.302553
+    },
+    "NCP": {
+      "keywords": [],
+      "topics": [],
+      "summary": "",
+      "articles_analyzed": 25,
+      "last_updated": "2025-10-19T17:32:23.227583",
+      "timestamp": 1760873543.227597
+    }
+  },
   "figures": {
     "Tareq Rahman": {
       "keywords": [],
       "topics": [],
       "summary": "",
-      "articles_analyzed": 22,
-      "associated_party": " GOP",
-      "last_updated": "2025-10-16T13:15:53.025156",
-      "timestamp": 1760598953.02517
+      "articles_analyzed": 25,
+      "associated_party": "বিএনপি",
+      "last_updated": "2025-10-19T16:57:19.816569",
+      "timestamp": 1760871439.816583
     },
     "Salahuddin Ahmed": {
       "keywords": [

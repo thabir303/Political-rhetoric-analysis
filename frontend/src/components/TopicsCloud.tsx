@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { TrendingUp, Loader2 } from 'lucide-react';
 
@@ -86,7 +86,7 @@ export function TopicsCloud({ onTopicClick }: TopicsCloudProps) {
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <div className="flex items-center gap-3 mb-6">
-        <TrendingUp className="w-6 h-6 text-blue-600" />
+        <TrendingUp />
         <h2 className="text-2xl font-bold text-gray-800">Topics Dashboard</h2>
         <span className="ml-auto px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
           {topics.length} Topics
