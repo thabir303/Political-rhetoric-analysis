@@ -82,194 +82,6 @@ def extract_llm_sections(analysis_text: str) -> Dict[str, Any]:
     return result
 
 
-async def generate_article_summaries(articles: List[Dict], db, llm) -> tuple:
-    """
-    Generate individual summaries for articles that don't have them yet.
-    
-    Args:
-        articles: List of articles to generate summaries for
-        db: VectorDatabase instance
-        llm: LLMGenerator instance
-        
-    Returns:
-        Tuple of (summaries_generated, summaries_skipped)
-    """
-    logger.info(f"🔄 Generating individual summaries for {len(articles)} articles...")
-    
-    summaries_generated = 0
-    summaries_skipped = 0
-    
-    for idx, article in enumerate(articles, 1):
-        article_id = article.get('id')
-        
-        # Check if article already has a summary
-        article_metadata_result = db.collection.get(
-            ids=[article_id],
-            include=["metadatas"]
-        )
-        
-        if article_metadata_result and article_metadata_result.get('metadatas'):
-            metadata = article_metadata_result['metadatas'][0]
-            
-            # Skip if already summarized
-            if metadata.get('summary') and metadata.get('is_summarized'):
-                logger.info(f"  [{idx}/{len(articles)}] ✓ Skipped (already has summary): {article.get('title', 'No title')[:50]}...")
-                summaries_skipped += 1
-                article['summary'] = metadata.get('summary')  # Use existing summary
-                continue
-        
-        # Generate summary for this article
-        try:
-            logger.info(f"  [{idx}/{len(articles)}] 🤖 Generating summary: {article.get('title', 'No title')[:50]}...")
-            
-            content = article.get('content', '')
-            
-            # Skip if content is too short
-            if len(content) < 100:
-                logger.info(f"  [{idx}/{len(articles)}] ⚠️ Skipped (content too short)")
-                article['summary'] = "Content too short for summary"
-                continue
-            
-            # Detect language
-            is_bangla = any('\u0980' <= char <= '\u09FF' for char in content[:200])
-            
-            # Create summary prompt
-            if is_bangla:
-                summary_prompt = f"নিচের আর্টিকেলটি ৩-৪টি সংক্ষিপ্ত বাক্যে সংক্ষেপে বলুন (শুধুমাত্র বাংলায় উত্তর দিন):\n\n{content}"
-            else:
-                summary_prompt = f"Summarize the following article in 3-4 concise sentences:\n\n{content}"
-            
-            # Generate summary
-            summary = llm._call_llm(summary_prompt)
-            
-            # Update database with summary
-            article_full = db.collection.get(
-                ids=[article_id],
-                include=["metadatas", "documents"]
-            )
-            
-            if article_full and article_full.get('metadatas'):
-                article_metadata = article_full['metadatas'][0]
-                article_content = article_full['documents'][0] if article_full.get('documents') else content
-                
-                # Store summary in metadata
-                article_metadata["summary"] = summary
-                article_metadata["is_summarized"] = True
-                article_metadata["summarized_at"] = datetime.now().isoformat()
-                
-                # Update database
-                db.collection.update(
-                    ids=[article_id],
-                    documents=[article_content],  # Keep original content
-                    metadatas=[article_metadata]   # Add summary to metadata
-                )
-                
-                # Add summary to article for display
-                article['summary'] = summary
-                
-                summaries_generated += 1
-                logger.info(f"  [{idx}/{len(articles)}] ✓ Summary generated and stored")
-                
-        except Exception as e:
-            logger.error(f"  [{idx}/{len(articles)}] ❌ Failed to generate summary: {e}")
-            article['summary'] = None  # Mark as failed
-    
-    logger.info(f"📊 Summary Generation Complete:")
-    logger.info(f"  - Generated: {summaries_generated} new summaries")
-    logger.info(f"  - Skipped: {summaries_skipped} (already had summaries)")
-    logger.info(f"  - Total: {len(articles)} articles processed")
-    
-    return summaries_generated, summaries_skipped
-
-
-async def generate_summary_of_summaries(articles: List[Dict], llm, entity_name: str, entity_type: str = "party") -> str:
-    """
-    Generate a comprehensive summary from all individual article summaries.
-    This creates a "Summary of Summaries" for the AI Analysis section.
-    
-    Args:
-        articles: List of articles with individual summaries
-        llm: LLMGenerator instance
-        entity_name: Name of party or figure
-        entity_type: "party" or "figure"
-        
-    Returns:
-        Comprehensive summary text combining all individual summaries
-    """
-    logger.info(f"🔄 Generating comprehensive summary from {len(articles)} article summaries...")
-    
-    # Collect all individual summaries (ONLY the summary text, not article details)
-    summaries_text = []
-    for article in articles:
-        summary = article.get('summary', '')
-        
-        if summary and summary not in ["Content too short for summary", "Summary not available"]:
-            # Just add the summary text, without article number or title
-            summaries_text.append(summary.strip())
-    
-    if not summaries_text:
-        logger.warning("No valid summaries found to combine")
-        return f"No summaries available for {entity_name}"
-    
-    logger.info(f"📝 Collected {len(summaries_text)} valid summaries for synthesis")
-    
-    # Detect language from first summary
-    first_summary = summaries_text[0] if summaries_text else ""
-    is_bangla = any('\u0980' <= char <= '\u09FF' for char in first_summary)
-    
-    # Combine all summaries into one text block
-    all_summaries_combined = "\n\n".join(summaries_text)
-    
-    # Create prompt for synthesizing summaries
-    if is_bangla:
-        prompt = f"""আপনি একজন রাজনৈতিক বিশ্লেষক। নিচে {entity_name} সম্পর্কে {len(summaries_text)}টি আলাদা আলাদা নিউজ আর্টিকেলের সংক্ষিপ্তসার দেওয়া হয়েছে।
-
-⚠️ গুরুত্বপূর্ণ নির্দেশনা:
-- এই সংক্ষিপ্তসারগুলো আবার আলাদাভাবে উল্লেখ করবেন না
-- "Article 1", "প্রথম আর্টিকেল", "Summary:" ইত্যাদি লিখবেন না
-- শুধুমাত্র একটি flowing comprehensive summary লিখুন
-- সব তথ্য একসাথে মিশিয়ে একটি cohesive narrative তৈরি করুন
-
-সংক্ষিপ্তসারগুলো:
-{all_summaries_combined}
-
-উপরের সব তথ্য থেকে {entity_name} এর সাম্প্রতিক কার্যক্রম সম্পর্কে একটি flowing comprehensive summary লিখুন (4-5টি প্যারাগ্রাফে) যেখানে থাকবে:
-- সামগ্রিক রাজনৈতিক অবস্থান এবং কৌশল
-- প্রধান থিম এবং দাবিসমূহ
-- গুরুত্বপূর্ণ বক্তব্য এবং কার্যক্রম
-- সাম্প্রতিক উন্নয়ন এবং ট্রেন্ড
-
-শুধুমাত্র synthesized narrative summary লিখুন (বাংলায়):"""
-    else:
-        prompt = f"""You are a political analyst. Below are {len(summaries_text)} individual news article summaries about {entity_name}.
-
-⚠️ CRITICAL INSTRUCTIONS:
-- Do NOT list the summaries separately
-- Do NOT write "Article 1", "First article", "Summary:" etc.
-- Write ONLY a flowing comprehensive summary
-- Synthesize all information into a cohesive narrative
-
-Summaries:
-{all_summaries_combined}
-
-Write a flowing comprehensive summary (4-5 paragraphs) about {entity_name}'s recent activities that covers:
-- Overall political positioning and strategy
-- Main themes and demands
-- Key statements and activities
-- Recent developments and trends
-
-Write ONLY the synthesized narrative summary:"""
-    
-    try:
-        combined_summary = llm._call_llm(prompt)
-        logger.info(f"✅ Comprehensive summary generated ({len(combined_summary)} characters)")
-        return combined_summary
-    except Exception as e:
-        logger.error(f"❌ Failed to generate comprehensive summary: {e}")
-        # Fallback: Just combine summaries with line breaks
-        return "\n\n".join(summaries_text)
-
-
 @router.post(
     "/party",
     response_model=AnalysisResponse,
@@ -302,10 +114,9 @@ async def analyze_party_articles(request: PartyAnalysisRequest):
         
         logger.info(f"Starting party analysis for: {request.party}")
         
-        # Initialize vector database, summary store, and LLM
+        # Initialize vector database and summary store
         db = VectorDatabase(collection_name="political_articles")
         summary_store = AISummaryStore()
-        llm = LLMGenerator()
         
         logger.info(f"Retrieving ALL articles for party: {request.party}")
         
@@ -416,23 +227,9 @@ async def analyze_party_articles(request: PartyAnalysisRequest):
         if len(articles_to_analyze) < 3:
             logger.warning(f"Only {len(articles_to_analyze)} articles found - may not be enough for comprehensive analysis")
         
-        # ===== GENERATE INDIVIDUAL SUMMARIES FOR EACH ARTICLE (PARTY ANALYSIS) =====
-        await generate_article_summaries(articles_to_analyze, db, llm)
-        
-        # ===== GENERATE COMPREHENSIVE SUMMARY FROM ALL INDIVIDUAL SUMMARIES =====
-        logger.info("🔄 Creating comprehensive summary from article summaries...")
-        comprehensive_summary = await generate_summary_of_summaries(
-            articles_to_analyze, 
-            llm, 
-            request.party,
-            "party"
-        )
-        logger.info(f"✅ Comprehensive summary created: {len(comprehensive_summary)} characters")
-        
-        # ===== PREPARE ARTICLES FOR COMPREHENSIVE ANALYSIS =====
         articles_text = []
         
-        logger.info(f"Preparing {len(articles_to_analyze)} articles for comprehensive LLM analysis")
+        logger.info(f"Preparing {len(articles_to_analyze)} articles for LLM analysis")
         
         for idx, article in enumerate(articles_to_analyze, 1):
             title = article.get('title', 'No title')
@@ -450,6 +247,9 @@ Content: {content}
 ---
 """
             articles_text.append(article_text)
+        
+        # Generate LLM analysis
+        llm = LLMGenerator()
         
         # Create comprehensive prompt for party analysis
         prompt = f"""You are analyzing {len(articles_to_analyze)} most recent news articles about {request.party}.
@@ -564,31 +364,19 @@ Try adjusting the date range or search parameters to find more articles for a co
         except Exception as e:
             logger.error(f"Failed to save party summary: {e}")
         
-        # Structure the analysis response with article summaries
+        # Structure the analysis response
         analysis = {
             "raw_analysis": analysis_result,
             "keywords": extracted['keywords'],
             "topics": extracted['topics'],
             "summary": extracted['summary'],
-            "comprehensive_summary": comprehensive_summary,  # NEW: Summary of all article summaries
             "articles_count": len(articles_to_analyze),
             "date_range": {
                 "earliest": min([a.get('date', '') for a in articles_to_analyze if a.get('date')], default='N/A'),
                 "latest": max([a.get('date', '') for a in articles_to_analyze if a.get('date')], default='N/A')
             },
             "sources": list(set([a.get('source', 'Unknown') for a in articles_to_analyze])),
-            "sample_titles": [a.get('title', 'No title') for a in articles_to_analyze[:5]],
-            # NEW: Include article summaries (all analyzed articles with their summaries)
-            "article_summaries": [
-                {
-                    "title": a.get('title', 'No title'),
-                    "date": a.get('date', 'No date'),
-                    "source": a.get('source', 'Unknown'),
-                    "summary": a.get('summary', 'Summary not available'),
-                    "url": a.get('url', '')
-                }
-                for a in articles_to_analyze
-            ]
+            "sample_titles": [a.get('title', 'No title') for a in articles_to_analyze[:5]]
         }
         
         processing_time = time.time() - start_time
@@ -643,10 +431,9 @@ async def analyze_figure_articles(request: FigureAnalysisRequest):
         
         logger.info(f"Starting figure analysis for: {request.figure}")
         
-        # Initialize vector database, summary store, and LLM
+        # Initialize vector database and summary store
         db = VectorDatabase(collection_name="political_articles")
         summary_store = AISummaryStore()
-        llm = LLMGenerator()
         
         logger.info(f"Retrieving ALL articles for figure: {request.figure} from party: {request.party}")
         
@@ -768,24 +555,9 @@ async def analyze_figure_articles(request: FigureAnalysisRequest):
         if len(articles_to_analyze) < 3:
             logger.warning(f"Only {len(articles_to_analyze)} articles found - may not be enough for comprehensive analysis")
         
-        # ===== GENERATE INDIVIDUAL SUMMARIES FOR EACH ARTICLE (FIGURE ANALYSIS) =====
-        llm = LLMGenerator()
-        await generate_article_summaries(articles_to_analyze, db, llm)
-        
-        # ===== GENERATE COMPREHENSIVE SUMMARY FROM ALL INDIVIDUAL SUMMARIES =====
-        logger.info("🔄 Creating comprehensive summary from article summaries (FIGURE)...")
-        comprehensive_summary = await generate_summary_of_summaries(
-            articles_to_analyze, 
-            llm, 
-            request.figure,
-            "figure"
-        )
-        logger.info(f"✅ Comprehensive summary created: {len(comprehensive_summary)} characters")
-        
-        # ===== PREPARE ARTICLES FOR COMPREHENSIVE ANALYSIS =====
         articles_text = []
         
-        logger.info(f"Preparing {len(articles_to_analyze)} articles for comprehensive LLM analysis")
+        logger.info(f"Preparing {len(articles_to_analyze)} articles for LLM analysis")
         
         for idx, article in enumerate(articles_to_analyze, 1):
             title = article.get('title', 'No title')
@@ -803,6 +575,9 @@ Content: {content}
 ---
 """
             articles_text.append(article_text)
+        
+        # Generate LLM analysis
+        llm = LLMGenerator()
         
         # Create comprehensive prompt for figure analysis
         prompt = f"""You are analyzing {len(articles_to_analyze)} most recent news articles about {request.figure}.
@@ -938,7 +713,6 @@ Try adjusting the date range or search parameters to find more articles for a co
             "keywords": extracted['keywords'],
             "topics": extracted['topics'],
             "summary": extracted['summary'],
-            "comprehensive_summary": comprehensive_summary,  # NEW: Summary of all article summaries
             "articles_count": len(articles_to_analyze),
             "date_range": {
                 "earliest": min([a.get('date', '') for a in articles_to_analyze if a.get('date')], default='N/A'),
@@ -946,18 +720,7 @@ Try adjusting the date range or search parameters to find more articles for a co
             },
             "sources": list(set([a.get('source', 'Unknown') for a in articles_to_analyze])),
             "associated_parties": list(set(associated_parties)) if associated_parties else [],
-            "sample_titles": [a.get('title', 'No title') for a in articles_to_analyze[:5]],
-            # NEW: Include article summaries (all analyzed articles with their summaries)
-            "article_summaries": [
-                {
-                    "title": a.get('title', 'No title'),
-                    "date": a.get('date', 'No date'),
-                    "source": a.get('source', 'Unknown'),
-                    "summary": a.get('summary', 'Summary not available'),
-                    "url": a.get('url', '')
-                }
-                for a in articles_to_analyze
-            ]
+            "sample_titles": [a.get('title', 'No title') for a in articles_to_analyze[:5]]
         }
         
         processing_time = time.time() - start_time

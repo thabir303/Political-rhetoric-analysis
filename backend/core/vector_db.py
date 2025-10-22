@@ -169,20 +169,10 @@ class VectorDatabase:
             article_id = article.get('id', f"article_{datetime.now().timestamp()}_{i}")
             ids.append(article_id)
             
-            # Prepare document
-            # If LLM summary available, use it as document (short)
-            # Otherwise, use title + full content
+            # Prepare document (title + content)
             title = article.get('title', '')
-            summary = article.get('summary', '')
             content = article.get('content', '')
-            
-            if summary:
-                # Store summary as document (preferred for display)
-                document = f"{title}\n\n{summary}".strip()
-            else:
-                # Fallback: store full content
-                document = f"{title}\n\n{content}".strip()
-            
+            document = f"{title}\n\n{content}".strip()
             documents.append(document)
             
             # Prepare metadata
@@ -420,54 +410,6 @@ class VectorDatabase:
             # Store main topics
             if 'topics' in llm_kw and llm_kw['topics']:
                 metadata['llm_topics'] = ', '.join(str(t) for t in llm_kw['topics'])
-        
-        # Handle NEW enhanced LLM analysis fields (from enhanced_scraping.py)
-        if 'summary' in article and article['summary']:
-            # Store article summary (from LLM)
-            metadata['summary'] = str(article['summary'])[:1000]  # Limit to 1000 chars
-        
-        # Handle keywords - prefer LLM extracted keywords
-        if 'keywords' in article:
-            if isinstance(article['keywords'], list):
-                # LLM returns list of keywords
-                metadata['keywords'] = ', '.join(str(k) for k in article['keywords'])
-            elif isinstance(article['keywords'], str) and article['keywords']:
-                # Already comma-separated string from LLM
-                metadata['keywords'] = str(article['keywords'])
-        
-        # Handle topics - prefer LLM extracted topics
-        if 'topics' in article:
-            if isinstance(article['topics'], list):
-                # LLM returns list of topics
-                metadata['topics'] = ', '.join(str(t) for t in article['topics'])
-            elif isinstance(article['topics'], str) and article['topics']:
-                # Already comma-separated string
-                metadata['topics'] = str(article['topics'])
-        
-        if 'has_election_impact' in article:
-            # Boolean flag for election impact
-            metadata['has_election_impact'] = str(article['has_election_impact'])
-        
-        if 'election_impact_description' in article and article['election_impact_description']:
-            # Description of election impact
-            metadata['election_impact_description'] = str(article['election_impact_description'])[:500]
-        
-        if 'election_impact_parties' in article and article['election_impact_parties']:
-            # Parties affected by election impact
-            if isinstance(article['election_impact_parties'], list):
-                metadata['election_impact_parties'] = ', '.join(str(p) for p in article['election_impact_parties'])
-            else:
-                metadata['election_impact_parties'] = str(article['election_impact_parties'])
-        
-        # Handle political_party and political_figures from categorization
-        if 'political_party' in article and article['political_party']:
-            metadata['political_party'] = str(article['political_party'])
-        
-        if 'political_figures' in article:
-            if isinstance(article['political_figures'], list):
-                metadata['political_figures'] = ', '.join(str(f) for f in article['political_figures'])
-            else:
-                metadata['political_figures'] = str(article['political_figures'])
         
         return metadata
     

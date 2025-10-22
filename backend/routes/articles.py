@@ -276,21 +276,26 @@ async def summarize_article(article_id: str):
         
         logger.info(f"Successfully generated summary for article {article_id}")
         
-        # Update the article metadata with the summary (keep original content as document)
+        # Update the article in database with the summary
+        # Keep original content in metadata for future reference
         try:
-            # Store summary in metadata (NOT replacing the document)
-            article_metadata["summary"] = summary
+            # Backup original content if not already backed up
+            if "original_content" not in article_metadata:
+                article_metadata["original_content"] = article_content
+            
+            # Mark as summarized
             article_metadata["is_summarized"] = True
+            article_metadata["summary"] = summary
             from datetime import datetime
             article_metadata["summarized_at"] = datetime.now().isoformat()
             
-            # Update database - keep original content as document, add summary to metadata
+            # Update database - summary as main document, original in metadata
             db.collection.update(
                 ids=[article_id],
-                documents=[article_content],  # Keep original content
-                metadatas=[article_metadata]   # Add summary to metadata
+                documents=[summary],
+                metadatas=[article_metadata]
             )
-            logger.info(f"Stored summary in metadata for article {article_id} (original content preserved)")
+            logger.info(f"Updated article {article_id} in database with generated summary (original preserved in metadata)")
         except Exception as update_error:
             logger.error(f"Failed to update article in database: {update_error}")
             # Continue anyway, at least return the summary

@@ -50,10 +50,6 @@ from backend.routes.scraping import router as scraping_router
 from backend.routes.analysis import router as analysis_router
 from backend.routes.stored_analysis import router as stored_analysis_router
 from backend.routes.parties import router as parties_router
-from backend.routes.figures import router as figures_router
-from backend.routes.topics import router as topics_router
-from backend.routes.keywords import router as keywords_router
-from backend.routes.election import router as election_router
 
 # Include routers
 app.include_router(general_router, prefix="/api/v1")
@@ -62,10 +58,6 @@ app.include_router(scraping_router, prefix="/api/v1")
 app.include_router(analysis_router, prefix="/api/v1")
 app.include_router(stored_analysis_router, prefix="/api/v1")
 app.include_router(parties_router, prefix="/api/v1")
-app.include_router(figures_router, prefix="/api/v1")  # Figure profiles
-app.include_router(topics_router)  # Already has /api/v1 prefix
-app.include_router(keywords_router)  # Already has /api/v1 prefix
-app.include_router(election_router)  # Already has /api/v1 prefix
 
 
 @app.on_event("startup")
@@ -97,22 +89,6 @@ async def startup_event():
     logger.info("    POST /api/v1/articles/query")
     logger.info("    GET  /api/v1/articles/{id}")
     logger.info("    DELETE /api/v1/articles/{id}")
-    logger.info("")
-    logger.info("  🏷️  Topics:")
-    logger.info("    GET  /api/v1/topics")
-    logger.info("    GET  /api/v1/topics/{topic}/articles")
-    logger.info("    GET  /api/v1/topics/stats")
-    logger.info("")
-    logger.info("  🔑 Keywords:")
-    logger.info("    GET  /api/v1/keywords")
-    logger.info("    GET  /api/v1/keywords/{keyword}/articles")
-    logger.info("    GET  /api/v1/keywords/search")
-    logger.info("    GET  /api/v1/keywords/stats")
-    logger.info("")
-    logger.info("  🗳️  2026 Election Impact:")
-    logger.info("    GET  /api/v1/election-impact")
-    logger.info("    GET  /api/v1/election-impact/stats")
-    logger.info("    GET  /api/v1/election-impact/timeline")
     logger.info("=" * 60)
 
 

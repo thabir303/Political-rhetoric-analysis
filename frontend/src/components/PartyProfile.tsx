@@ -18,6 +18,8 @@ export default function PartyProfile() {
   
   // Expanded articles state
   const [expandedArticles, setExpandedArticles] = useState<Set<string>>(new Set())
+  const [loadingFullArticle, setLoadingFullArticle] = useState<string | null>(null)
+  const [fullArticles, setFullArticles] = useState<Map<string, string>>(new Map())
   
   // Summarization state
   const [summarizingArticles, setSummarizingArticles] = useState<Set<string>>(new Set())
@@ -74,15 +76,36 @@ export default function PartyProfile() {
     loadProfile()
   }
   
-  // Toggle article expansion
-  const toggleArticle = (articleId: string) => {
-    const newExpanded = new Set(expandedArticles)
+  // Toggle article expansion and fetch full content if needed
+  const toggleArticle = async (articleId: string) => {
     if (expandedArticles.has(articleId)) {
+      // Collapse
+      const newExpanded = new Set(expandedArticles)
       newExpanded.delete(articleId)
+      setExpandedArticles(newExpanded)
     } else {
+      // Expand - fetch full content if not already loaded
+      const newExpanded = new Set(expandedArticles)
       newExpanded.add(articleId)
+      setExpandedArticles(newExpanded)
+      
+      if (!fullArticles.has(articleId)) {
+        setLoadingFullArticle(articleId)
+        try {
+          const response = await fetch(`http://localhost:8000/api/v1/article/${articleId}/full`)
+          if (response.ok) {
+            const data = await response.json()
+            const newFullArticles = new Map(fullArticles)
+            newFullArticles.set(articleId, data.content)
+            setFullArticles(newFullArticles)
+          }
+        } catch (err) {
+          console.error('Failed to load full article:', err)
+        } finally {
+          setLoadingFullArticle(null)
+        }
+      }
     }
-    setExpandedArticles(newExpanded)
   }
   
   // Generate summary for an article using LLM
@@ -102,6 +125,11 @@ export default function PartyProfile() {
       }
 
       const data = await response.json()
+      
+      // Store the full generated summary in fullArticles so "See More" shows it
+      const newFullArticles = new Map(fullArticles)
+      newFullArticles.set(articleId, data.summary)
+      setFullArticles(newFullArticles)
       
       // Update the profile articles with the generated summary
       if (profile) {
@@ -129,6 +157,12 @@ export default function PartyProfile() {
   
   // Get unique topics
   const allTopics = profile ? Array.from(new Set(profile.articles.flatMap(a => a.topics))).slice(0, 10) : []
+
+  // Get date range
+  const dateRange = profile && profile.articles.length > 0 ? {
+    earliest: profile.articles[profile.articles.length - 1].date,
+    latest: profile.articles[0].date
+  } : null
 
   // Loading state
   if (loading) {
@@ -306,7 +340,7 @@ export default function PartyProfile() {
             </div>
 
             {/* AI Keywords */}
-            {/* {profile.ai_keywords && profile.ai_keywords.length > 0 && (
+            {profile.ai_keywords && profile.ai_keywords.length > 0 && (
               <div className="mb-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                   <svg className="h-4 w-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
@@ -325,7 +359,7 @@ export default function PartyProfile() {
                   ))}
                 </div>
               </div>
-            )} */}
+            )}
 
             {/* AI Topics */}
             {profile.ai_topics && profile.ai_topics.length > 0 && (
@@ -428,7 +462,7 @@ export default function PartyProfile() {
         </div>
 
         {/* Date Range Display */}
-        {/* {dateRange && (
+        {dateRange && (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
               <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -448,13 +482,14 @@ export default function PartyProfile() {
               </div>
             </div>
           </div>
-        )} */}
+        )}
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Keywords and Topics */}
           <div className="lg:col-span-1 space-y-6">
-            {/* <div className="bg-white rounded-xl shadow-lg p-6">
+            {/* Top Keywords */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -475,7 +510,7 @@ export default function PartyProfile() {
               ) : (
                 <p className="text-gray-500 text-sm">No keywords available</p>
               )}
-            </div> */}
+            </div>
 
             {/* Topics */}
             <div className="bg-white rounded-xl shadow-lg p-6">
@@ -566,18 +601,24 @@ export default function PartyProfile() {
                           <div className="p-3 bg-gray-50 rounded-lg">
                             <p className="text-gray-700 leading-relaxed text-sm">
                               {expandedArticles.has(article.id)
-                                ? article.summary
-                                : `${article.summary.slice(0, 280)}${article.summary.length > 280 ? '...' : ''}`}
+                                ? (fullArticles.get(article.id) || article.summary)
+                                : article.summary}
                             </p>
                           </div>
                           
                           {/* See More / See Less Button */}
-                          {article.summary.length > 280 && (
+                          {article.summary.length >= 280 && (
                             <button
                               onClick={() => toggleArticle(article.id)}
-                              className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 transition-colors"
+                              disabled={loadingFullArticle === article.id}
+                              className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 transition-colors disabled:text-gray-400"
                             >
-                              {expandedArticles.has(article.id) ? (
+                              {loadingFullArticle === article.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                                  <span>Loading...</span>
+                                </>
+                              ) : expandedArticles.has(article.id) ? (
                                 <>
                                   <span>See Less</span>
                                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

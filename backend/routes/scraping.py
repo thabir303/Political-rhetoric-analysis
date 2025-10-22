@@ -3,12 +3,11 @@ Scraping Routes - Separate from LLM Analysis
 """
 from fastapi import APIRouter, HTTPException, status
 from typing import List, Optional
+import time
 import logging
 from datetime import datetime
-import time
 
 from backend.models.schemas import ScrapingRequest, ScrapingResponse
-from political_entities_config import normalize_party_name, normalize_figure_name
 
 logger = logging.getLogger(__name__)
 
@@ -18,36 +17,26 @@ router = APIRouter(prefix="/scraping", tags=["Scraping"])
 @router.post(
     "/newspapers",
     response_model=ScrapingResponse,
-    summary="Scrape newspapers and store articles (NO LLM - Only Categorization)"
+    summary="Scrape newspapers and store articles (NO LLM)"
 )
 async def scrape_newspapers(request: ScrapingRequest):
     """
     Scrape articles from newspapers and store in vector database.
     
-    This endpoint performs:
-    1. Scrapes articles from newspapers (ProthomAlo, Jugantor, DailyStar, DhakaTribune)
-    2. **Categorizes articles (political figures, parties detection)**
-       - Detects political parties mentioned (BNP, Jamaat-e-Islami, NCP, etc.)
-       - Detects political figures mentioned (তারেক রহমান, নাহিদ ইসলাম, etc.)
-       - Handles Bengali and English name variants
-       - Maps figures to their parties
-       - Uses canonical names from POLITICAL_ENTITIES
+    This endpoint ONLY:
+    1. Scrapes articles from newspapers
+    2. Categorizes articles
     3. Generates embeddings
-    4. Stores in ChromaDB with categorization metadata
+    4. Stores in ChromaDB
     
-    **NO LLM ANALYSIS** - This endpoint does NOT call LLM for:
-    - Summary generation
-    - Keyword extraction  
-    - Topic identification
-    - Election impact analysis
-    
-    For LLM analysis, use the separate `/api/v1/analysis/llm` endpoint.
+    NO LLM analysis is performed here.
+    Use /analysis/llm endpoint for LLM analysis separately.
     
     Args:
         request: ScrapingRequest with start_date, end_date, newspapers
         
     Returns:
-        ScrapingResponse with scraping and categorization statistics
+        ScrapingResponse with scraping statistics
     """
     start_time = time.time()
     
@@ -108,66 +97,24 @@ async def scrape_newspapers(request: ScrapingRequest):
         
         logger.info(f"Total articles scraped: {len(all_articles)}")
         
-        # Step 2: Categorization (detect parties and figures with name normalization)
-        logger.info("=" * 80)
-        logger.info("Starting categorization (party/figure detection)...")
-        logger.info("This will detect political entities and map Bengali/English name variants")
-        logger.info("=" * 80)
+        # Step 2: Categorization
+        logger.info("Starting categorization...")
         categorizer = ArticleCategorizer()
         categorized_articles = []
         
-        for i, article in enumerate(all_articles):
+        for article in all_articles:
             try:
-                # Basic categorization - detect parties and figures
                 categorization = categorizer.categorize_article(article)
                 categorized = article.copy()
-                
-                # Extract categorization fields
-                parties = categorization.get('parties', [])
-                people = categorization.get('people', [])  # Already canonical names
-                people_affiliations = categorization.get('people_affiliations', {})
-                
-                # Add categorization fields to article
-                # Important: Store as lists, NOT comma-separated strings
-                # The vector_db._prepare_metadata will convert to comma-separated strings
-                categorized['parties'] = parties if isinstance(parties, list) else [parties] if parties else []
-                categorized['people'] = people if isinstance(people, list) else [people] if people else []
-                categorized['people_affiliations'] = people_affiliations
-                categorized['keywords'] = categorization.get('keywords', [])
-                categorized['themes'] = categorization.get('themes', {})
-                categorized['is_speech'] = categorization.get('is_speech', False)
-                categorized['is_stance'] = categorization.get('is_stance', False)
-                
+                categorized.update(categorization)
                 categorized_articles.append(categorized)
-                
-                # Log categorization result with details
-                logger.info(f"✅ [{i+1}/{len(all_articles)}] {article.get('title', 'Untitled')[:60]}...")
-                if parties and len(parties) > 0:
-                    logger.info(f"   🏛️  Parties: {', '.join(str(p) for p in parties)}")
-                if people and len(people) > 0:
-                    logger.info(f"   👤 Figures: {', '.join(str(p) for p in people)}")
-                if people_affiliations and len(people_affiliations) > 0:
-                    logger.info(f"   🔗 Affiliations: {people_affiliations}")
-                
             except Exception as e:
-                logger.error(f"Error categorizing article {i}: {e}")
-                # Add article without categorization
-                categorized = article.copy()
-                categorized['parties'] = ''
-                categorized['people'] = ''
-                categorized['people_affiliations'] = {}
-                categorized_articles.append(categorized)
+                logger.error(f"Error categorizing article: {e}")
+                continue
         
-        logger.info("=" * 80)
-        logger.info(f"Categorization complete: {len(categorized_articles)} articles processed")
-        logger.info("=" * 80)
+        logger.info(f"Categorized {len(categorized_articles)} articles")
         
-        # Step 3: LLM Analysis DISABLED - Skip entirely
-        # We now only do categorization (party/figure detection) without LLM
-        logger.info("LLM analysis is disabled. Only categorization (party/figure detection) will be performed.")
-        logger.info("Articles will be stored with detected parties and figures only.")
-        
-        # Step 4: Generate embeddings
+        # Step 3: Generate embeddings
         logger.info("Generating embeddings...")
         try:
             embedder = EmbeddingGenerator(model_name='all-MiniLM-L6-v2')
@@ -181,7 +128,7 @@ async def scrape_newspapers(request: ScrapingRequest):
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
         
-        # Step 5: Store in Vector Database
+        # Step 4: Store in Vector Database
         logger.info("Storing articles in vector database...")
         stored_count = 0
         
@@ -210,16 +157,14 @@ async def scrape_newspapers(request: ScrapingRequest):
             logger.error(f"Error storing articles: {e}")
         
         processing_time = time.time() - start_time
-        
-        success_message = f"Successfully scraped, categorized (party/figure detection), and stored {stored_count} articles WITHOUT LLM analysis"
-        
+        print(f"Scraping process completed in {processing_time:.2f} seconds")
         return ScrapingResponse(
             status="completed",
             total_articles_scraped=len(all_articles),
             total_articles_stored=stored_count,
             articles_by_source=articles_by_source,
             processing_time=processing_time,
-            message=success_message
+            message=f"Successfully scraped and stored {stored_count} articles (NO LLM analysis)"
         )
     
     except Exception as e:

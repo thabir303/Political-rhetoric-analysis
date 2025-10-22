@@ -9,6 +9,7 @@ from .figures import router as figures_router
 from .scraping import router as scraping_router
 from .analysis import router as analysis_router
 from .stored_analysis import router as stored_analysis_router
+from .debug import router as debug_router
 
 # Create main router
 router = APIRouter()
@@ -21,5 +22,6 @@ router.include_router(figures_router, tags=["Figure Profiles"])  # No prefix - d
 router.include_router(scraping_router, tags=["Scraping"])
 router.include_router(analysis_router, tags=["Analysis"])
 router.include_router(stored_analysis_router, tags=["Stored Analysis"])
+router.include_router(debug_router, tags=["Debug"])  # Debug endpoints to view stored articles
 
 __all__ = ["router"]

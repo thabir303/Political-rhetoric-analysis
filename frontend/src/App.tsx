@@ -8,9 +8,6 @@ import FigureProfile from './components/FigureProfile'
 import PartyProfile from './components/PartyProfile'
 import PoliticalPartyList from './components/PoliticalPartyList'
 import NewspaperScraper from './components/NewspaperScraper'
-import { TopicArticles } from './pages/TopicArticles'
-import { KeywordArticles } from './pages/KeywordArticles'
-import { ElectionImpact } from './pages/ElectionImpact'
 
 function App() {
   return (
@@ -25,9 +22,6 @@ function App() {
         <Route path="/database" element={<DatabasePage />} />
         <Route path="/scraping-analysis" element={<ScrapingAnalysisPage />} />
         <Route path="/categorization-test" element={<CategorizationTestPage />} />
-        <Route path="/topics/:topic" element={<TopicArticles />} />
-        <Route path="/keywords/:keyword" element={<KeywordArticles />} />
-        <Route path="/election-impact" element={<ElectionImpact />} />
       </Routes>
     </BrowserRouter>
   )

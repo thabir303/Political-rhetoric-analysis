@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Newspaper, Users, Search, Database, FileSearch, Vote } from 'lucide-react';
-import { TopicsCloud } from '../components/TopicsCloud';
+import { Newspaper, Users, Search, Database, FileSearch } from 'lucide-react';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -33,13 +32,6 @@ const LandingPage = () => {
       description: 'View and manage articles stored in the vector database',
       path: '/database',
       color: 'from-orange-500 to-orange-600'
-    },
-    {
-      icon: <Vote className=" " />,
-      title: '2026 Election Impact',
-      description: 'Articles with potential impact on Bangladesh\'s 2026 election',
-      path: '/election-impact',
-      color: 'from-purple-500 to-pink-600'
     }
   ];
 
@@ -73,7 +65,7 @@ const LandingPage = () => {
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
           {features.map((feature, index) => (
             <div
               key={index}
@@ -94,11 +86,6 @@ const LandingPage = () => {
               </button>
             </div>
           ))}
-        </div>
-
-        {/* Topics Cloud Section */}
-        <div className="mb-12">
-          <TopicsCloud onTopicClick={(topic) => navigate(`/topics/${encodeURIComponent(topic)}`)} />
         </div>
 
         {/* Stats Section */}

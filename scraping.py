@@ -13,7 +13,6 @@ import time
 import logging
 from urllib.parse import urljoin, urlparse
 import re
-from enhanced_scraping import get_article_analyzer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -929,83 +928,43 @@ def scrape_all_newspapers(start_date: str = "2024-08-05", end_date: str = "2025-
 
 def save_articles_to_vector_db(articles: List[Dict]):
     """
-    Save scraped articles to the vector database with LLM analysis.
+    Save scraped articles to the vector database.
     
     Args:
         articles: List of article dictionaries
     """
     from database import vector_store
     
-    # Initialize LLM analyzer
-    analyzer = get_article_analyzer()
+    logger.info(f"Saving {len(articles)} articles to vector database...")
     
-    logger.info(f"Saving {len(articles)} articles to vector database with LLM analysis...")
-    successful = 0
-    failed = 0
-    
-    for idx, article in enumerate(articles, 1):
+    for article in articles:
         try:
-            logger.info(f"Processing article {idx}/{len(articles)}: {article['title'][:50]}...")
-            
-            # Perform LLM analysis during scraping
-            analysis = analyzer.analyze_article(
-                article_content=article['content'],
-                article_title=article['title'],
-                article_date=article.get('date', ''),
-                political_party=article.get('party', ''),
-                political_figure=article.get('mentions', [None])[0] if article.get('mentions') else None
-            )
-            
-            # Prepare metadata with enhanced LLM analysis
+            # Prepare metadata
             metadata = {
-                # Original fields
                 'date': article['date'],
                 'category': article.get('category', 'general'),
                 'persons': ', '.join(article['mentions']),
                 'source': article['source'],
                 'title': article['title'],
                 'language': article.get('language', 'Unknown'),
-                'url': article['url'],
-                
-                # NEW: Enhanced LLM analysis fields
-                'original_content': article['content'],  # Backup of full text
-                'summary': analysis['summary'],
-                'keywords': ','.join(analysis['keywords']),  # Comma-separated
-                'topics': ','.join(analysis['topics']),  # Comma-separated
-                'election_2026_impact': analysis['election_2026_impact'],
-                'has_election_impact': analysis['has_election_impact'],
-                
-                # Processing metadata
-                'analyzed_at': analysis['analyzed_at'],
-                'analysis_language': analysis['language'],
-                'processing_time': analysis['processing_time']
+                'url': article['url']
             }
             
             if 'author' in article and article['author']:
                 metadata['author'] = article['author']
             
-            # Store summary as main document (better for semantic search)
-            # Full content is in metadata['original_content']
+            # Add to vector database
             vector_store.add_article(
-                content=analysis['summary'],  # Use summary for search
+                content=article['content'],
                 metadata=metadata
             )
             
-            successful += 1
-            logger.info(f"✓ Saved with analysis: {article['title'][:50]}... "
-                       f"(Keywords: {len(analysis['keywords'])}, Topics: {len(analysis['topics'])}, "
-                       f"Election Impact: {analysis['has_election_impact']})")
+            logger.info(f"Saved: {article['title'][:50]}...")
             
         except Exception as e:
-            failed += 1
-            logger.error(f"✗ Error saving article to database: {e}")
-            logger.error(f"  Article: {article.get('title', 'Unknown')}")
+            logger.error(f"Error saving article to database: {e}")
     
-    logger.info(f"\n{'='*80}")
-    logger.info(f"Database save complete!")
-    logger.info(f"  ✓ Successful: {successful}/{len(articles)}")
-    logger.info(f"  ✗ Failed: {failed}/{len(articles)}")
-    logger.info(f"{'='*80}\n")
+    logger.info("Finished saving articles to database")
 
 
 if __name__ == "__main__":

@@ -136,32 +136,28 @@ async def get_figure_profile(
                         # Skip articles with invalid dates
                         continue
                 
-                # Get LLM analysis data
-                llm_summary = metadata.get("summary", "")  # LLM-generated summary
-                llm_keywords = metadata.get("keywords", "")  # LLM keywords
-                llm_topics = metadata.get("topics", "")  # LLM topics
-                has_election_impact = metadata.get("has_election_impact", "false").lower() == "true"
-                election_impact_description = metadata.get("election_impact_description", "")
+                # Get keywords - prioritize LLM keywords
+                keywords_str = ""
+                llm_topics_str = metadata.get("llm_topics", "")
+                llm_extra_keywords = metadata.get("llm_extra_keywords", "")
+                regular_keywords = metadata.get("keywords", "")
                 
-                # Parse keywords and topics into arrays
-                keywords_list = [k.strip() for k in llm_keywords.split(",") if k.strip()] if llm_keywords else []
-                topics_list = [t.strip() for t in llm_topics.split(",") if t.strip()] if llm_topics else []
+                # Use LLM topics first, then LLM extra keywords, then regular keywords
+                if llm_topics_str:
+                    keywords_str = llm_topics_str
+                elif llm_extra_keywords:
+                    keywords_str = llm_extra_keywords
+                elif regular_keywords:
+                    keywords_str = regular_keywords
                 
                 matching_articles.append({
                     "id": doc_id,
                     "title": metadata.get("title", "No title"),
                     "date": article_date,
                     "source": metadata.get("source", "Unknown"),
+                    "content": document if document else "",  # Full content - no truncation
                     "url": article_url,
-                    
-                    # LLM Analysis Data
-                    "summary": llm_summary if llm_summary else document[:300],  # Use LLM summary or fallback to first 300 chars
-                    "keywords": keywords_list,
-                    "topics": topics_list,
-                    "has_election_impact": has_election_impact,
-                    "election_impact_description": election_impact_description,
-                    
-                    # Metadata
+                    "keywords": keywords_str,
                     "parties": metadata.get("parties", ""),
                     "people": metadata.get("people", ""),
                     "date_ts": int(metadata.get("date_ts", 0))
@@ -176,13 +172,10 @@ async def get_figure_profile(
         
         # Convert to ArticleSummary format
         articles_list = []
-        all_keywords = set()  # Collect all unique keywords
-        all_topics = set()  # Collect all unique topics
-        
         for article in matching_articles:
-            # Collect keywords and topics for aggregation
-            all_keywords.update(article["keywords"])
-            all_topics.update(article["topics"])
+            # Create preview (first 300 characters for display)
+            full_content = article["content"]
+            preview = full_content[:300] + "..." if len(full_content) > 300 else full_content
             
             articles_list.append(ArticleSummary(
                 id=article["id"],
@@ -190,12 +183,12 @@ async def get_figure_profile(
                 date=article["date"],
                 source=article["source"],
                 similarity=1.0,  # All articles are relevant since they mention the figure
-                summary=article["summary"],  # LLM-generated summary
+                summary=preview,  # Preview for display
                 key_points=[],
                 stance_analysis=None,
-                keywords=article["keywords"],  # LLM keywords as array
+                keywords=article["keywords"].split(",") if article["keywords"] else [],
                 key_phrases=[],
-                topics=article["topics"],  # LLM topics as array
+                topics=[],
                 url=article.get("url")
             ))
         
@@ -208,26 +201,14 @@ async def get_figure_profile(
             summaries_by_date[date].append({
                 "title": article["title"],
                 "source": article["source"],
-                "url": article.get("url", ""),
-                "summary": article["summary"],
-                "keywords": article["keywords"],
-                "topics": article["topics"]
+                "url": article.get("url", "")
             })
         
         # Get AI summary for this figure
         summary_store = AISummaryStore()
         ai_summary_data = summary_store.get_figure_summary(figure_name)
         
-        # Use aggregated keywords/topics from actual articles if AI summary not available
-        ai_keywords = ai_summary_data.get("keywords", []) if ai_summary_data else list(all_keywords)
-        ai_topics = ai_summary_data.get("topics", []) if ai_summary_data else list(all_topics)
-        
-        # Count election impact articles
-        election_impact_count = sum(1 for a in matching_articles if a.get("has_election_impact", False))
-        
         logger.info(f"Retrieved {len(articles_list)} articles for {figure_name} ({party_name})")
-        logger.info(f"Aggregated {len(all_keywords)} unique keywords, {len(all_topics)} unique topics")
-        logger.info(f"{election_impact_count} articles with 2026 election impact")
         
         return FigureProfileResponse(
             figure_name=figure_name,
@@ -236,8 +217,8 @@ async def get_figure_profile(
             articles=articles_list,
             summaries_by_date=summaries_by_date,
             ai_summary=ai_summary_data.get("summary") if ai_summary_data else None,
-            ai_keywords=ai_keywords,
-            ai_topics=ai_topics,
+            ai_keywords=ai_summary_data.get("keywords", []) if ai_summary_data else [],
+            ai_topics=ai_summary_data.get("topics", []) if ai_summary_data else [],
             last_analyzed=ai_summary_data.get("last_updated") if ai_summary_data else None
         )
         

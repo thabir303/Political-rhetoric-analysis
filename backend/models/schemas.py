@@ -57,8 +57,8 @@ class ScrapingRequest(BaseModel):
         description="List of newspapers to scrape"
     )
     enable_llm_analysis: Optional[bool] = Field(
-        default=True,
-        description="Enable LLM analysis (keywords, topics, election impact). WARNING: Very slow! Set to false for faster scraping."
+        default=False,
+        description="Enable LLM analysis (speech summaries and keywords). Warning: Very slow due to API rate limits!"
     )
 
 
@@ -150,7 +150,6 @@ class FigureProfileResponse(BaseModel):
     ai_summary: Optional[str] = Field(None, description="AI-generated summary")
     ai_keywords: List[str] = Field(default_factory=list, description="AI-generated keywords")
     ai_topics: List[str] = Field(default_factory=list, description="AI-generated topics")
-    election_impact: Optional[Dict[str, Any]] = Field(None, description="Aggregated election impact analysis")
     last_analyzed: Optional[str] = Field(None, description="Last AI analysis timestamp")
 
 
