@@ -13,6 +13,8 @@ import time
 import logging
 from urllib.parse import urljoin, urlparse
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,90 +25,181 @@ logger = logging.getLogger(__name__)
 POLITICAL_ENTITIES = {
     "BNP": {
         "party_names": [
-            "Bangladesh Nationalist Party", "BNP", 
-            "বাংলাদেশ জাতীয়তাবাদী দল", "বিএনপি"
+            "Bangladesh Nationalist Party", "BNP", "বাংলাদেশ জাতীয়তাবাদী দল", "বিএনপি",
+            "বাংলাদেশ ন্যাশনালিস্ট পার্টি", "বি.এন.পি", "BNP party", "B.N.P."
         ],
         "figures": {
-            "Tareq Rahman": ["Tareq Rahman", "Tarek Rahman", "তারেক রহমান", "তারেক"],
-            "Mirza Fakhrul": ["Mirza Fakhrul", "Mirza Fakhrul Islam Alamgir", "মির্জা ফখরুল", "ফখরুল"],
-            "Salahuddin Ahmed": ["Salahuddin Ahmed", "সালাউদ্দিন আহমেদ", "সালাহউদ্দিন", "সালাহউদ্দিন আহমেদ"]
+            "Tareq Rahman": [
+                "Tareq Rahman", "Tarique Rahman", "Tarek Rahman", 
+                "BNP Acting Chairman", "BNP leader Tarique", "তারেক রহমান",
+                "বিএনপি ভারপ্রাপ্ত চেয়ারম্যান তারেক", "তারিক রহমান"
+            ],
+            "Mirza Fakhrul": [
+                "Mirza Fakhrul Islam Alamgir", "Mirza Fakhrul", 
+                "মির্জা ফখরুল ইসলাম আলমগীর", "মির্জা ফখরুল", "ফখরুল", 
+                "BNP Secretary General Fakhrul", "Mr Fakhrul Islam Alamgir"
+            ],
+            "Salahuddin Ahmed": [
+                "Salahuddin Ahmed", "Salah Uddin Ahmed", "Salahuddin Ahmad",
+                "BNP leader Salahuddin", "সালাহউদ্দিন আহমেদ", "সালাউদ্দিন আহমেদ",
+                "বিএনপি নেতা সালাহউদ্দিন"
+            ]
         }
     },
     "JI": {
         "party_names": [
-            "Jamaat-e-Islami Bangladesh", "Jamaat-e-Islami", "JI",
-            "জামায়াতে ইসলামি", "জামায়াত"
+            "Bangladesh Jamaat-e-Islami", "Jamaat-e-Islami Bangladesh", "Jamaat-e-Islami", "JI",
+            "বাংলাদেশ জামায়াতে ইসলামি", "জামায়াতে ইসলামি", "জামায়াত",
+            "ইসলামী জামায়াত", "Jamaat Islami", "Jamaat-e Islami"
         ],
         "figures": {
-            "Shafiqur Rahman": ["Shafiqur Rahman", "শফিকুর রহমান"],
-            "Abu Taher": ["Abu Taher", "আবু তাহের"],
-            "Golam Parwar": ["Golam Parwar", "গোলাম পারওয়ার"]
+            "Shafiqur Rahman": [
+                "Dr Shafiqur Rahman", "Shafiqur Rahman", "Ameer Shafiqur Rahman",
+                "জামায়াত আমীর শফিকুর রহমান", "শফিকুর রহমান"
+            ],
+            "Abu Taher": [
+                "Syed Abdullah Muhammad Taher", "Maulana Abu Taher", "Abu Taher",
+                "আবু তাহের", "মাওলানা তাহের", "মাও. তাহের"
+            ],
+            "Golam Parwar": [
+                "Mia Golam Parwar", "Mia Ghulam Parwar", "Golam Parwar",
+                "মিয়া গোলাম পারওয়ার", "গোলাম পারওয়ার", "জামায়াত নেতা পারওয়ার"
+            ]
         }
     },
     "NCP": {
         "party_names": [
-            "National Citizen Party", "National Citizens Party", "NCP",
-            "জাতীয় নাগরিক পার্টি", "নাগরিক পার্টি"
+            "National Citizen Party", "National Citizens Party", "NCP", 
+            "জাতীয় নাগরিক পার্টি", "নাগরিক পার্টি", "ন্যাশনাল সিটিজেন পার্টি",
+            "N.C.P", "NCP Bangladesh"
         ],
         "figures": {
-            "Nahid Islam": ["Nahid Islam", "নাহিদ ইসলাম"],
-            "Sarjis Alam": ["Sarjis Alam", "সরজিস আলম"],
-            "Hasnat Abdullah": ["Hasnat Abdullah", "হাসনাত আবদুল্লাহ"],
-            "Nasiruddin Patwary": ["Nasiruddin Patwary", "নাসিরউদ্দিন পাটোয়ারী"],
-            "Akhter Hossain": ["Akhter Hossain", "আখতার হোসেন"],
-            "Tasnim Zara": ["Tasnim Zara", "তাসনিম জারা"]
+            "Nahid Islam": [
+                "Nahid Islam", "Md Nahid Islam", "Convener Nahid Islam",
+                "Student Leader Nahid", "নাহিদ ইসলাম", "মো. নাহিদ ইসলাম"
+            ],
+            "Sarjis Alam": [
+                "Sarjis Alam", "Sarjis Alom", "Chief Coordinator Sarjis", 
+                "সরজিস আলম"
+            ],
+            "Hasnat Abdullah": [
+                "Hasnat Abdullah", "Hasnath Abdullah",
+                "হাসনাত আবদুল্লাহ", "নাগরিক পার্টির হাসনাত আবদুল্লাহ"
+            ],
+            "Nasiruddin Patwary": [
+                "Nasiruddin Patwary", "Nasir Uddin Patwary",
+                "নাসিরউদ্দিন পাটোয়ারী", "নাসিরউদ্দিন পাটোয়ারী"
+            ],
+            "Akhter Hossain": [
+                "Akhter Hossain", "Akhtar Hossain", "Akhtar Hossen",
+                "আখতার হোসেন", "আখতার হোসেন"
+            ],
+            "Tasnim Zara": [
+                "Tasnim Zara", "Tasnim Jara", "তাসনিম জারা", "তাসনিম জারা"
+            ]
         }
     },
     "AB Party": {
         "party_names": [
-            "Amar Bangladesh Party", "AB Party", "ABP",
-            "আমার বাংলাদেশ পার্টি"
+            "Amar Bangladesh Party", "AB Party", "ABP", 
+            "আমার বাংলাদেশ পার্টি", "এবি পার্টি", "আমার বাংলাদেশ পার্টি (এবি)"
         ],
         "figures": {
-            "Barrister Fuad": ["Barrister Fuad", "ব্যারিস্টার ফুয়াদ", "Fuad"]
+            "Barrister Fuad": [
+                "Barrister Asaduzzaman Fuad", "Barrister Fuad",
+                "Asaduzzaman Fuad", "ব্যারিস্টার ফুয়াদ", "ফুয়াদ", 
+                "এবি পার্টির ফুয়াদ"
+            ]
         }
     },
     "GOP": {
         "party_names": [
-            "Gono Odhikar Parishad", "GOP",
-            "গণ অধিকার পরিষদ"
+            "Gono Odhikar Parishad", "Gono Adhikar Parishad", "GOP",
+            "গণ অধিকার পরিষদ", "গণ অধিকার পরিষদ (গওপ)", 
+            "Gana Odhikar Parishad", "Gono Odhikar"
         ],
         "figures": {
-            "Nurul Haque": ["Nurul Haque", "নুরুল হক"],
-            "Rashed": ["Rashed", "রাশেদ"]
+            "Nurul Haque": [
+                "Nurul Haque Nur", "Nurul Haque", "Nur Chowdhury",
+                "নুরুল হক নুর", "নুরুল হক", "নূর",
+                "গণ অধিকার পরিষদের নুর"
+            ],
+            "Rashed": [
+                "Rashed Khan", "Rashed", "রাশেদ খান", "রাশেদ"
+            ]
         }
     },
     "Gono Songhati": {
         "party_names": [
-            "Gonosanghati Andolon", "Gono Songhati", "GSA",
-            "গণসংহতি আন্দোলন"
+            "Gonosanghati Andolon", "Gono Songhoti Andolon", "GSA",
+            "গণসংহতি আন্দোলন", "গণ সংহতি আন্দোলন", 
+            "Gonosanhati Andolon", "Gono Songhati"
         ],
         "figures": {
-            "Jonayed Saki": ["Jonayed Saki", "জোনায়েদ সাকী"]
+            "Jonayed Saki": [
+                "Jonayed Saki", "Zonayed Saki", "জোনায়েদ সাকী", 
+                "জনায়েদ সাকি", "গণসংহতি নেতা সাকি"
+            ]
         }
     },
     "Interim Government": {
         "party_names": [
-            "Interim Government", "অন্তর্বর্তীকালীন সরকার"
+            "Interim Government", "অন্তর্বর্তীকালীন সরকার",
+            "Yunus Interim Government", "Interim cabinet of Dr Yunus",
+            "ইউনূস সরকার", "অন্তর্বর্তী সরকার"
         ],
         "figures": {
-            "Dr Yunus": ["Dr Yunus", "Dr. Yunus", "Muhammad Yunus", "ড. ইউনূস", "ড ইউনূস", "মুহাম্মদ ইউনূস"],
-            "Shafiqul Alam": ["Shafiqul Alam", "শফিকুল আলম"],
-            "Mahfuz Alam": ["Mahfuz Alam", "মাহফুজ আলম"],
-            "Asif Nazrul": ["Asif Nazrul", "আসিফ নজরুল"],
-            "Rizwana Hasan": ["Rizwana Hasan", "রিজওয়ানা হাসান"],
-            "Lt Gen Jahangir Alam Chowdhury": ["Jahangir Alam Chowdhury", "Lt Gen Jahangir", "জাহাঙ্গীর আলম চৌধুরী"],
-            "Ali Riaz": ["Ali Riaz", "আলী রিয়াজ"],
-            "Badiul Alam Majumder": ["Badiul Alam Majumder", "বদিউল আলম মজুমদার"],
-            "CEC AMM Nasir Uddin": ["AMM Nasir Uddin", "Nasir Uddin", "নাসির উদ্দিন"],
-            "Army Chief General Waqar Uz Zaman": ["Waqar Uz Zaman", "General Waqar", "ওয়াকার উজ জামান"],
-            "IGP Baharul Alam": ["Baharul Alam", "বাহারুল আলম"],
-            "DMP Commissioner Sajjat Ali": ["Sajjat Ali", "সাজ্জাত আলী"],
-            "Mahfuz Anam": ["Mahfuz Anam", "মাহফুজ আনাম"],
-            "Mahmudur Rahman": ["Mahmudur Rahman", "মাহমুদুর রহমান"]
+            "Dr Yunus": [
+                "Dr Muhammad Yunus", "Prof. Muhammad Yunus", "Dr M. Yunus",
+                "Chief Adviser Yunus", "Professor Yunus",
+                "ড. মুহাম্মদ ইউনূস", "ড ইউনূস", "ড. ইউনুস", "মুহাম্মদ ইউনূস"
+            ],
+            "Shafiqul Alam": [
+                "Shafiqul Alam", "শফিকুল আলম", "ড. শফিকুল আলম"
+            ],
+            "Mahfuz Alam": [
+                "Mahfuz Alam", "মাহফুজ আলম"
+            ],
+            "Asif Nazrul": [
+                "Dr Asif Nazrul", "Professor Asif Nazrul", "আসিফ নজরুল"
+            ],
+            "Rizwana Hasan": [
+                "Rizwana Hasan", "রিজওয়ানা হাসান", "এডভোকেট রিজওয়ানা হাসান"
+            ],
+            "Lt Gen Jahangir Alam Chowdhury": [
+                "Lt. Gen. Jahangir Alam Chowdhury", "জাহাঙ্গীর আলম চৌধুরী", 
+                "লেফটেন্যান্ট জেনারেল জাহাঙ্গীর"
+            ],
+            "Ali Riaz": [
+                "Dr Ali Riaz", "Professor Ali Riaz", "আলী রিয়াজ"
+            ],
+            "Badiul Alam Majumder": [
+                "Dr Badiul Alam Majumder", "বদিউল আলম মজুমদার"
+            ],
+            "CEC AMM Nasir Uddin": [
+                "CEC AMM Nasir Uddin", "AMM Nasir Uddin", "Nasir Uddin", 
+                "নাসির উদ্দিন"
+            ],
+            "Army Chief General Waqar Uz Zaman": [
+                "General Waqar Uz Zaman", "Army Chief Waqar", 
+                "ওয়াকার উজ জামান", "জেনারেল ওয়াকার"
+            ],
+            "IGP Baharul Alam": [
+                "IGP Baharul Alam", "Baharul Alam", "বাহারুল আলম"
+            ],
+            "DMP Commissioner Sajjat Ali": [
+                "DMP Commissioner Sajjat Ali", "Sajjat Ali", "সাজ্জাত আলী"
+            ],
+            "Mahfuz Anam": [
+                "Mahfuz Anam", "Editor Mahfuz Anam", "মাহফুজ আনাম"
+            ],
+            "Mahmudur Rahman": [
+                "Mahmudur Rahman", "Editor Mahmudur Rahman", "মাহমুদুর রহমান"
+            ]
         }
     }
 }
+
 
 
 class NewspaperScraper:
@@ -423,34 +516,53 @@ class JugantorScraper(NewspaperScraper):
     BASE_URL = "https://www.jugantor.com"
     ARCHIVE_BASE_URL = "https://www.jugantor.com/archive"
     
+    def __init__(self, start_date: str = "2024-08-05", end_date: str = "2025-10-30"):
+        """Initialize scraper with thread safety."""
+        super().__init__(start_date, end_date)
+        self._lock = threading.Lock()  # Thread-safe operations
+    
     def scrape_articles(self) -> List[Dict]:
         """
         Scrape articles from Jugantor archive for politics category.
+        Uses parallel processing for faster scraping.
         
         Returns:
             List of article dictionaries
         """
-        logger.info("Starting Jugantor archive scraping (Politics only)...")
+        logger.info("Starting Jugantor archive scraping (Politics only - PARALLEL MODE)...")
         logger.info(f"Date range: {self.start_date.strftime('%Y-%m-%d')} to {self.end_date.strftime('%Y-%m-%d')}")
         
         all_articles = []
         
         # Generate list of dates to scrape
+        dates_to_scrape = []
         current_date = self.start_date
         while current_date <= self.end_date:
-            date_str = current_date.strftime('%Y-%m-%d')
-            logger.info(f"Scraping articles for date: {date_str}")
-            
-            articles = self.scrape_articles_for_date(date_str)
-            all_articles.extend(articles)
-            
-            # Add delay between dates
-            time.sleep(2)
-            
-            # Move to next date
+            dates_to_scrape.append(current_date.strftime('%Y-%m-%d'))
             current_date += timedelta(days=1)
         
-        logger.info(f"Jugantor: Scraped {len(all_articles)} total articles")
+        logger.info(f"Total dates to scrape: {len(dates_to_scrape)}")
+        
+        # Parallel processing of dates with ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit all date scraping tasks
+            future_to_date = {
+                executor.submit(self.scrape_articles_for_date, date_str): date_str 
+                for date_str in dates_to_scrape
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_date):
+                date_str = future_to_date[future]
+                try:
+                    articles = future.result()
+                    with self._lock:  # Thread-safe list update
+                        all_articles.extend(articles)
+                    logger.info(f"✓ Completed {date_str}: {len(articles)} articles")
+                except Exception as e:
+                    logger.error(f"✗ Error scraping {date_str}: {e}")
+        
+        logger.info(f"Jugantor: Scraped {len(all_articles)} total articles (PARALLEL)")
         return all_articles
     
     def get_archive_url(self, date: str, page: int = None) -> str:
@@ -534,6 +646,7 @@ class JugantorScraper(NewspaperScraper):
     def scrape_articles_for_date(self, date: str) -> List[Dict]:
         """
         Scrape all politics articles for a specific date across all pages.
+        Uses parallel processing for article extraction.
         
         Args:
             date: Date in YYYY-MM-DD format
@@ -544,6 +657,9 @@ class JugantorScraper(NewspaperScraper):
         all_articles = []
         page = 1
         max_pages = 100  # Increased page limit for more comprehensive scraping
+        
+        # Collect all article URLs first
+        all_article_urls = []
         
         while page <= max_pages:
             logger.info(f"  Processing page {page} for {date}")
@@ -559,23 +675,37 @@ class JugantorScraper(NewspaperScraper):
                 break
             
             logger.info(f"    Found {len(article_links)} politics articles on page {page}")
-            
-            # Extract content from each article
-            for i, article_url in enumerate(article_links):
-                logger.info(f"      Scraping article {i+1}/{len(article_links)}: {article_url}")
-                
-                article_data = self.scrape_article(article_url, date)
-                if article_data:
-                    all_articles.append(article_data)
-                
-                # Add delay to be respectful to the server
-                time.sleep(1)
+            all_article_urls.extend(article_links)
             
             # Move to next page
             page += 1
+            time.sleep(1)  # Delay between pages
+        
+        if not all_article_urls:
+            logger.info(f"  No articles found for {date}")
+            return []
+        
+        logger.info(f"  Total politics article URLs for {date}: {len(all_article_urls)}")
+        
+        # Parallel processing of articles with ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # Submit all article scraping tasks
+            future_to_url = {
+                executor.submit(self.scrape_article, url, date): url 
+                for url in all_article_urls
+            }
             
-            # Add delay between pages
-            time.sleep(2)
+            # Collect results as they complete
+            for i, future in enumerate(as_completed(future_to_url), 1):
+                url = future_to_url[future]
+                try:
+                    article_data = future.result()
+                    if article_data:
+                        all_articles.append(article_data)
+                    if i % 10 == 0:  # Progress log every 10 articles
+                        logger.info(f"    Processed {i}/{len(all_article_urls)} articles for {date}")
+                except Exception as e:
+                    logger.error(f"    Error scraping {url}: {e}")
         
         logger.info(f"  Total politics articles scraped for {date}: {len(all_articles)}")
         return all_articles
