@@ -110,12 +110,23 @@ async def get_parties(response: Response):
         # Build party -> figures mapping from actual stored data
         party_figures_found = {}
         party_counts = {}
+        party_keywords = {}  # NEW: Track keywords per party
+        party_topics = {}  # NEW: Track topics per party
         
         for metadata in all_metadatas:
             # Get parties from this article
             parties_str = metadata.get('parties', '')
             if parties_str:
                 parties = [p.strip() for p in parties_str.split(',') if p.strip()]
+                
+                # Get LLM analysis data - check all possible field names
+                keywords_str = (metadata.get('keywords', '') or 
+                              metadata.get('llm_keywords', '') or 
+                              metadata.get('ai_keywords', ''))
+                
+                topics_str = (metadata.get('topics', '') or 
+                            metadata.get('llm_topics', '') or 
+                            metadata.get('ai_topics', ''))
                 
                 # Get people_affiliations if available
                 people_affiliations_str = metadata.get('people_affiliations', '{}')
@@ -128,18 +139,28 @@ async def get_parties(response: Response):
                 people_str = metadata.get('people', '')
                 people = [p.strip() for p in people_str.split(',') if p.strip()] if people_str else []
                 
-                # Count articles per party and track figures
+                # Count articles per party and track figures, keywords, topics
                 for party in parties:
                     # Normalize party name to match POLITICAL_ENTITIES keys
                     # This handles cases like "JI" → "Jamaat-e-Islami"
                     normalized_party = normalize_party_name(party)
-                    if party != normalized_party:
-                        logger.info(f"Normalized '{party}' → '{normalized_party}'")
                     
                     party_counts[normalized_party] = party_counts.get(normalized_party, 0) + 1
                     
                     if normalized_party not in party_figures_found:
                         party_figures_found[normalized_party] = set()
+                        party_keywords[normalized_party] = set()
+                        party_topics[normalized_party] = set()
+                    
+                    # Add keywords for this party
+                    if keywords_str:
+                        keywords = [k.strip() for k in keywords_str.split(',') if k.strip()]
+                        party_keywords[normalized_party].update(keywords)
+                    
+                    # Add topics for this party
+                    if topics_str:
+                        topics = [t.strip() for t in topics_str.split(',') if t.strip()]
+                        party_topics[normalized_party].update(topics)
                     
                     # Add figures associated with this party (convert to canonical names)
                     for person in people:
@@ -149,12 +170,6 @@ async def get_parties(response: Response):
                             canonical_name = get_canonical_name(person)
                             if canonical_name:
                                 party_figures_found[normalized_party].add(canonical_name)
-                            else:
-                                # Log if we couldn't find canonical name
-                                logger.warning(f"No canonical name found for: {person}")
-        
-        # Log party counts after normalization
-        logger.info(f"Party counts after normalization: {dict(sorted(party_counts.items(), key=lambda x: x[1], reverse=True))}")
         
         # Build response - show ALL parties found in database, with POLITICAL_ENTITIES details if available
         parties_list = []
@@ -168,6 +183,10 @@ async def get_parties(response: Response):
                 # Get canonical figure names (only those found in articles)
                 canonical_figures = sorted(list(party_figures_found.get(party_key, set())))
                 
+                # Get aggregated keywords and topics
+                aggregated_keywords = sorted(list(party_keywords.get(party_key, set())))
+                aggregated_topics = sorted(list(party_topics.get(party_key, set())))
+                
                 # Get full party name (from 'full_name' or first name in 'names' list, or key as fallback)
                 full_name = party_data.get("full_name") or (party_data.get("names", [party_key])[0] if party_data.get("names") else party_key)
                 
@@ -175,7 +194,9 @@ async def get_parties(response: Response):
                     name=party_key,
                     full_name=full_name,
                     figures=canonical_figures,  # ONLY canonical English names
-                    total_articles=article_count
+                    total_articles=article_count,
+                    ai_keywords=aggregated_keywords,  # NEW: Aggregated from all articles
+                    ai_topics=aggregated_topics  # NEW: Aggregated from all articles
                 ))
         
         # Also check for any parties in DB that aren't in POLITICAL_ENTITIES (shouldn't happen but for robustness)
@@ -650,37 +671,35 @@ async def get_party_profile(
                 full_content = document if document else ""
                 preview = full_content[:300] + "..." if len(full_content) > 300 else full_content
                 
-                # Get keywords - prioritize LLM keywords
-                keywords_str = ""
-                llm_topics_str = metadata.get("llm_topics", "")
-                llm_extra_keywords = metadata.get("llm_extra_keywords", "")
-                regular_keywords = metadata.get("keywords", "")
+                # Get LLM analysis data - check all possible field names
+                llm_summary = (metadata.get("summary", "") or 
+                             metadata.get("llm_summary", "") or 
+                             metadata.get("ai_summary", ""))
                 
-                # Use LLM topics first, then LLM extra keywords, then regular keywords
-                if llm_topics_str:
-                    keywords_str = llm_topics_str
-                elif llm_extra_keywords:
-                    keywords_str = llm_extra_keywords
-                elif regular_keywords:
-                    keywords_str = regular_keywords
+                llm_keywords = (metadata.get("keywords", "") or 
+                              metadata.get("llm_keywords", "") or 
+                              metadata.get("ai_keywords", ""))
                 
-                # Prefer LLM summary over full content
-                llm_summary = metadata.get("summary", "")
-                content_to_store = llm_summary if llm_summary else (document[:300] + "..." if document and len(document) > 300 else (document or ""))
+                llm_topics = (metadata.get("topics", "") or 
+                            metadata.get("llm_topics", "") or 
+                            metadata.get("ai_topics", ""))
+                
+                # Use LLM summary for display
+                content_to_store = llm_summary if llm_summary else preview
                 
                 matching_articles.append({
                     "id": doc_id,
                     "title": metadata.get("title", "No title"),
                     "date": article_date,
                     "source": metadata.get("source", "Unknown"),
-                    "content": content_to_store,  # Use LLM summary if available, else preview
+                    "content": content_to_store,
                     "summary": llm_summary,  # LLM-generated summary
-                    "topics": metadata.get("topics", ""),  # LLM-generated topics (comma-separated)
+                    "keywords": llm_keywords,  # LLM-generated keywords
+                    "topics": llm_topics,  # LLM-generated topics
                     "url": article_url,
-                    "keywords": keywords_str,
                     "parties": metadata.get("parties", ""),
                     "people": metadata.get("people", ""),
-                    "has_election_impact": metadata.get("has_election_impact", "false"),
+                    "has_election_impact": metadata.get("has_election_impact", "false") == "true",
                     "election_impact_description": metadata.get("election_impact_description", ""),
                     "date_ts": int(metadata.get("date_ts", 0))
                 })
@@ -694,9 +713,17 @@ async def get_party_profile(
         
         # Convert to ArticleSummary format
         articles_list = []
+        all_keywords = set()  # Collect all unique keywords
+        all_topics = set()  # Collect all unique topics
+        
         for article in matching_articles:
-            # Use LLM summary (already set in content field if available)
-            display_summary = article.get("summary", "") or article.get("content", "")
+            # Parse keywords and topics
+            keywords_list = [k.strip() for k in article["keywords"].split(",") if k.strip()] if article["keywords"] else []
+            topics_list = [t.strip() for t in article["topics"].split(",") if t.strip()] if article["topics"] else []
+            
+            # Collect for aggregation
+            all_keywords.update(keywords_list)
+            all_topics.update(topics_list)
             
             articles_list.append(ArticleSummary(
                 id=article["id"],
@@ -704,12 +731,12 @@ async def get_party_profile(
                 date=article["date"],
                 source=article["source"],
                 similarity=1.0,
-                summary=display_summary,  # LLM summary preferred
+                summary=article.get("summary", "") or article.get("content", ""),
                 key_points=[],
                 stance_analysis=None,
-                keywords=article["keywords"].split(",") if article["keywords"] else [],
+                keywords=keywords_list,
                 key_phrases=[],
-                topics=article.get("topics", "").split(",") if article.get("topics") else [],
+                topics=topics_list,
                 url=article.get("url")
             ))
         
@@ -736,6 +763,10 @@ async def get_party_profile(
         # Get AI summary for this party
         ai_summary_data = summary_store.get_party_summary(party_name)
         
+        # Use aggregated keywords/topics from actual articles if AI summary not available
+        ai_keywords = ai_summary_data.get("keywords", []) if ai_summary_data else list(all_keywords)
+        ai_topics = ai_summary_data.get("topics", []) if ai_summary_data else list(all_topics)
+        
         # If no pre-generated AI summary, create aggregated analysis
         if not ai_summary_data:
             from backend.core.aggregation import create_aggregated_analysis
@@ -747,21 +778,18 @@ async def get_party_profile(
             )
             
             ai_summary_text = aggregated.get("coverage_summary")
-            ai_keywords_list = aggregated.get("top_keywords", [])
-            ai_topics_list = aggregated.get("top_topics", [])
+            # Use aggregated data from articles
+            ai_keywords_list = list(all_keywords) if all_keywords else aggregated.get("top_keywords", [])
+            ai_topics_list = list(all_topics) if all_topics else aggregated.get("top_topics", [])
             election_impact_data = aggregated.get("election_impact")
         else:
             ai_summary_text = ai_summary_data.get("summary")
-            ai_keywords_list = ai_summary_data.get("keywords", [])
-            ai_topics_list = ai_summary_data.get("topics", [])
+            # Use aggregated data if available, otherwise from articles
+            ai_keywords_list = ai_keywords
+            ai_topics_list = ai_topics
             # Still calculate election impact from articles
             from backend.core.aggregation import aggregate_election_impact
             election_impact_data = aggregate_election_impact(matching_articles)
-        
-        logger.info(f"Retrieved {len(articles_list)} articles for party {party_name}")
-        logger.info(f"Aggregated keywords: {ai_keywords_list}")
-        logger.info(f"Aggregated topics: {ai_topics_list}")
-        logger.info(f"Election impact: {election_impact_data.get('total_articles_with_impact', 0)} articles")
         
         return FigureProfileResponse(
             figure_name=full_name,  # Using party full name

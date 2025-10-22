@@ -13,8 +13,8 @@ import logging
 
 # Import name normalizer for Bengali-English name mapping
 from backend.core.name_normalizer import get_canonical_name, deduplicate_names
-# Import the authoritative POLITICAL_ENTITIES from scraping module
-from backend.core.scraping import POLITICAL_ENTITIES
+# Import the authoritative POLITICAL_ENTITIES from config
+from political_entities_config import POLITICAL_ENTITIES, normalize_party_name, normalize_figure_name
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -203,13 +203,13 @@ class ArticleCategorizer:
     def _identify_parties_and_figures(self, text: str) -> Dict[str, List[str]]:
         """
         Identify political parties mentioned in text along with their figures.
-        Uses the new POLITICAL_ENTITIES structure from scraping module.
+        Uses POLITICAL_ENTITIES from political_entities_config.
         
         Args:
             text: Text to analyze
             
         Returns:
-            Dictionary mapping party names to list of canonical figures found
+            Dictionary mapping party keys to list of canonical figures found
         """
         text_lower = text.lower()
         result = {}
@@ -218,15 +218,16 @@ class ArticleCategorizer:
             party_mentioned = False
             figures_found = []
             
-            # Check if party name is mentioned
-            for party_name in party_data.get('party_names', []):
+            # Check if party name is mentioned (check against 'names' list)
+            for party_name in party_data.get('names', []):
                 if party_name.lower() in text_lower:
                     party_mentioned = True
                     break
             
-            # Check if any figure is mentioned (with normalization)
+            # Check if any figure is mentioned (figures is a dict of canonical_name -> aliases)
             figures_dict = party_data.get('figures', {})
             for canonical_name, variants in figures_dict.items():
+                # Check each variant/alias
                 for variant in variants:
                     if variant.lower() in text_lower:
                         # Add canonical name
@@ -280,27 +281,30 @@ class ArticleCategorizer:
                 for variant in variants:
                     variant_lower = variant.lower()
                     
-                    # Direct match
-                    if variant_lower in text_lower:
+                    # Direct match (exact match with word boundaries)
+                    import re
+                    if re.search(r'\b' + re.escape(variant_lower) + r'\b', text_lower):
                         people.append(variant)
                         people_canonical_found.add(canonical_name)
                         break
                     
-                    # Partial match for compound names (check last part)
+                    # Partial match for compound names (only for names > 10 chars to avoid false positives)
                     # For example: "ইউনূস" should match "ড. ইউনূস" or "মুহাম্মদ ইউনূস"
-                    variant_parts = variant_lower.split()
-                    if len(variant_parts) > 1:
-                        # Check if any significant part (>3 chars) of the name is in text
-                        for part in variant_parts:
-                            if len(part) > 3 and part in text_lower:
-                                # Verify it's a word boundary match (not part of another word)
-                                import re
-                                if re.search(r'\b' + re.escape(part) + r'\b', text_lower):
-                                    people.append(variant)
-                                    people_canonical_found.add(canonical_name)
-                                    break
-                        if canonical_name in people_canonical_found:
-                            break
+                    # But NOT: "Alam" matching everything with "Alam"
+                    if len(variant) > 10:  # Only for longer names
+                        variant_parts = variant_lower.split()
+                        if len(variant_parts) > 1:
+                            # Check if any significant part (>5 chars) of the name is in text
+                            for part in variant_parts:
+                                if len(part) > 5 and re.search(r'\b' + re.escape(part) + r'\b', text_lower):
+                                    # Verify it's not a too-common word
+                                    common_words = ['alam', 'ahmed', 'rahman', 'islam', 'hassan', 'hossain']
+                                    if part not in common_words:
+                                        people.append(variant)
+                                        people_canonical_found.add(canonical_name)
+                                        break
+                            if canonical_name in people_canonical_found:
+                                break
         
         return people
     

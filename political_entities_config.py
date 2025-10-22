@@ -18,7 +18,7 @@ POLITICAL_ENTITIES = {
         "figures": {
             "Tareq Rahman": ["তারেক রহমান", "Tareq Rahman", "Tarique Rahman"],
             "Mirza Fakhrul Islam Alamgir": ["মির্জা ফখরুল", "Mirza Fakhrul", "মির্জা ফখরুল ইসলাম আলমগীর"],
-            "Salauddin Ahmed": ["সালাউদ্দিন আহমেদ", "Salauddin Ahmed"]
+            "Salauddin Ahmed": ["সালাউদ্দিন আহমেদ","সালাহউদ্দিন আহমেদ", "Salauddin Ahmed"]
         }
     },
     "Jamaat-e-Islami": {
@@ -37,7 +37,7 @@ POLITICAL_ENTITIES = {
         "full_name": "National Citizens Party",
         "names": [
             "National Citizens Party", "NCP",
-            "জাতীয় নাগরিক পার্টি", "জাতীয় নাগরিক পার্টি (এনসিপি)"
+            "জাতীয় নাগরিক পার্টি", "জাতীয় নাগরিক পার্টি (এনসিপি)","এনসিপি",
         ],
         "figures": {
             "Nahid Islam": ["নাহিদ ইসলাম", "Nahid Islam"],
@@ -175,11 +175,11 @@ def normalize_party_name(detected_name: str) -> str:
         # Check against all known names
         for name in entity['names']:
             if detected_lower == name.lower() or detected_lower in name.lower() or name.lower() in detected_lower:
-                logger.info(f"Normalized '{detected_name}' → '{key}' (matched '{name}')")
+                # Removed logging
                 return key
     
     # Return as-is if no match found
-    logger.warning(f"No normalization match for party '{detected_name}'")
+    # Removed logging
     return detected_name
 
 def normalize_figure_name(detected_name: str) -> tuple:

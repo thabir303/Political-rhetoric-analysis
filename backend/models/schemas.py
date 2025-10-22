@@ -57,8 +57,8 @@ class ScrapingRequest(BaseModel):
         description="List of newspapers to scrape"
     )
     enable_llm_analysis: Optional[bool] = Field(
-        default=False,
-        description="Enable LLM analysis (speech summaries and keywords). Warning: Very slow due to API rate limits!"
+        default=True,
+        description="Enable LLM analysis (keywords, topics, election impact). WARNING: Very slow! Set to false for faster scraping."
     )
 
 

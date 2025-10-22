@@ -1281,7 +1281,9 @@ async def get_categorization_test(limit: int = Query(default=50, le=200)):
                 "primary_parties": metadata.get("primary_parties", ""),
                 "mentioned_figures": metadata.get("mentioned_figures", ""),
                 "political_entities": metadata.get("political_entities", ""),
-                "keywords": metadata.get("keywords", ""),
+                "keywords": (metadata.get("keywords", "") or 
+                           metadata.get("llm_keywords", "") or 
+                           metadata.get("ai_keywords", "")),
                 "content_preview": results["documents"][i][:200] + "..."
             })
         
