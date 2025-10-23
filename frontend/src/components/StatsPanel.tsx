@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getStats } from '../utils/api'
+import { formatDateToDDMMYYYY } from '../utils/dateFormat'
 
 interface Stats {
   total_articles: number
@@ -81,7 +82,7 @@ export default function StatsPanel() {
               <div>
                 <div className="text-sm text-gray-600 mb-2">Date Range</div>
                 <div className="text-xs text-gray-700">
-                  {stats.date_range.earliest} → {stats.date_range.latest}
+                  {formatDateToDDMMYYYY(stats.date_range.earliest)} → {formatDateToDDMMYYYY(stats.date_range.latest)}
                 </div>
               </div>
             )}

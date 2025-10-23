@@ -132,6 +132,7 @@ Or with uvicorn directly:
 
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
+kill -9 $(sudo lsof -t -i:8000)
 ```
 
 ### Production mode

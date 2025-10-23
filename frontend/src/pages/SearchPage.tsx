@@ -75,14 +75,25 @@ const SearchPage = () => {
 
       const data = await response.json();
       
-      // Update the result with the summary
-      setResults(prevResults => 
-        prevResults.map(result => 
-          result.id === articleId 
-            ? { ...result, summary: data.summary, content: data.summary }
+      // Update the search results with ALL LLM-generated data
+      setResults(prevResults =>
+        prevResults.map(result =>
+          result.id === articleId
+            ? { 
+                ...result, 
+                summary: data.summary,
+                key_points: data.key_points || [],
+                keywords: data.keywords || [],
+                topics: data.topics || [],
+                stance_analysis: data.stance_analysis || ''
+              }
             : result
         )
       );
+      
+      console.log('Summary generated with keywords:', data.keywords);
+      console.log('Topics:', data.topics);
+      console.log('Stance analysis:', data.stance_analysis);
     } catch (err) {
       console.error('Error generating summary:', err);
       alert('Failed to generate summary. Please try again.');

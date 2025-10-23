@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import type { FigureProfileResponse } from '../types'
 import { AnalysisButton } from './AnalysisButton'
+import { formatDateToDDMMYYYY } from '../utils/dateFormat'
+import { getPeriodSummaries } from '../utils/api'
 
 export default function PartyProfile() {
   const { partyName } = useParams<{ partyName: string }>()
@@ -23,6 +25,26 @@ export default function PartyProfile() {
   
   // Summarization state
   const [summarizingArticles, setSummarizingArticles] = useState<Set<string>>(new Set())
+  
+  // Period summary state (for newly generated summary from AnalysisButton)
+  const [periodSummary, setPeriodSummary] = useState<{
+    summary: string
+    key_points: string[]
+    keywords: string[]
+    topics: string[]
+    date_range: { start: string, end: string }
+  } | null>(null)
+  
+  // All period summaries state (loaded from storage)
+  const [allPeriodSummaries, setAllPeriodSummaries] = useState<Array<{
+    summary: string
+    key_points: string[]
+    keywords: string[]
+    topics: string[]
+    date_range: { start: string, end: string }
+    last_updated?: string
+  }>>([])
+  const [loadingPeriodSummaries, setLoadingPeriodSummaries] = useState(false)
 
   const loadProfile = async (from?: string, to?: string) => {
     if (!partyName) {
@@ -61,9 +83,27 @@ export default function PartyProfile() {
     }
   }
 
+  // Load all period summaries for this party
+  const loadPeriodSummaries = async () => {
+    if (!partyName) return
+    
+    setLoadingPeriodSummaries(true)
+    try {
+      const response = await getPeriodSummaries('party', partyName)
+      if (response.success && response.period_summaries) {
+        setAllPeriodSummaries(response.period_summaries)
+      }
+    } catch (error) {
+      console.error('Failed to load period summaries:', error)
+    } finally {
+      setLoadingPeriodSummaries(false)
+    }
+  }
+
   useEffect(() => {
     setLoading(true)
     loadProfile()
+    loadPeriodSummaries()
   }, [partyName])
 
   const handleApplyFilter = () => {
@@ -126,20 +166,31 @@ export default function PartyProfile() {
 
       const data = await response.json()
       
-      // Store the full generated summary in fullArticles so "See More" shows it
+      // Store the full generated summary and LLM data
       const newFullArticles = new Map(fullArticles)
       newFullArticles.set(articleId, data.summary)
       setFullArticles(newFullArticles)
       
-      // Update the profile articles with the generated summary
+      // Update the profile articles with ALL LLM-generated data
       if (profile) {
         const updatedArticles = profile.articles.map(article =>
           article.id === articleId
-            ? { ...article, summary: data.summary }
+            ? { 
+                ...article, 
+                summary: data.summary,
+                key_points: data.key_points || [],
+                keywords: data.keywords || [],
+                topics: data.topics || [],
+                stance_analysis: data.stance_analysis || ''
+              }
             : article
         )
         setProfile({ ...profile, articles: updatedArticles })
       }
+      
+      console.log('Summary generated with keywords:', data.keywords)
+      console.log('Topics:', data.topics)
+      console.log('Stance analysis:', data.stance_analysis)
     } catch (err) {
       console.error('Error generating summary:', err)
       alert('Failed to generate summary. Please try again.')
@@ -235,7 +286,32 @@ export default function PartyProfile() {
               </div>
             </div>
             
-            <AnalysisButton type="party" name={partyName || ''} />
+            <AnalysisButton 
+              type="party" 
+              name={partyName || ''} 
+              onAnalysisComplete={(result) => {
+                // Store period summary data
+                if (result.success) {
+                  setPeriodSummary({
+                    summary: result.analysis.raw_analysis,
+                    key_points: result.key_points || [],
+                    keywords: result.keywords || [],
+                    topics: result.topics || [],
+                    date_range: {
+                      start: result.date_range.earliest,
+                      end: result.date_range.latest
+                    }
+                  })
+                  
+                  // Reload profile to get updated article summaries
+                  console.log('Analysis complete - reloading profile to show updated summaries...')
+                  loadProfile(dateFrom, dateTo)
+                  
+                  // Reload period summaries to include the new one
+                  loadPeriodSummaries()
+                }
+              }}
+            />
           </div>
         </div>
       </div>
@@ -285,6 +361,172 @@ export default function PartyProfile() {
             </div>
           </div>
         </div>
+
+        {/* All Period Summaries Section */}
+        {allPeriodSummaries.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2 mb-6">
+              <svg className="h-7 w-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Period Summaries
+              <span className="text-sm text-gray-500 font-normal">({allPeriodSummaries.length})</span>
+            </h2>
+            
+            <div className="space-y-6">
+              {allPeriodSummaries.map((summary, index) => (
+                <div key={index} className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+                  <div className="flex items-start justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-800">Period Analysis</h3>
+                    <span className="text-xs text-gray-600 bg-white px-3 py-1 rounded-full shadow-sm">
+                      {formatDateToDDMMYYYY(summary.date_range.start)} to {formatDateToDDMMYYYY(summary.date_range.end)}
+                    </span>
+                  </div>
+
+                  {/* Summary Text */}
+                  <div className="mb-4 prose prose-sm max-w-none">
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                      {summary.summary}
+                    </p>
+                  </div>
+
+                  {/* Key Points */}
+                  {summary.key_points && summary.key_points.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <svg className="h-4 w-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Key Points
+                      </h4>
+                      <ul className="space-y-1">
+                        {summary.key_points.map((point, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <span className="text-blue-600 mt-1">•</span>
+                            <span className="text-gray-700 text-sm">{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Keywords and Topics */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {summary.keywords && summary.keywords.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Keywords</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {summary.keywords.map((keyword, idx) => (
+                            <span key={idx} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {summary.topics && summary.topics.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Topics</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {summary.topics.map((topic, idx) => (
+                            <span key={idx} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-800">
+                              {topic}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Period Summary Section (newly generated, will be moved to storage) */}
+        {/* {periodSummary && (
+          <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl shadow-lg p-6 mb-8 border border-green-100">
+            <div className="flex items-start justify-between mb-4">
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <svg className="h-7 w-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Period Summary
+              </h2>
+              <span className="text-xs text-gray-600 bg-white px-3 py-1 rounded-full shadow-sm">
+                {periodSummary.date_range.start} to {periodSummary.date_range.end}
+              </span>
+            </div>
+
+            <div className="mb-6 prose prose-sm max-w-none">
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {periodSummary.summary}
+              </p>
+            </div>
+
+            {periodSummary.key_points && periodSummary.key_points.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Key Points
+                </h3>
+                <ul className="space-y-2">
+                  {periodSummary.key_points.map((point, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-green-600 mt-1">•</span>
+                      <span className="text-gray-700 text-sm">{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {periodSummary.keywords && periodSummary.keywords.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <svg className="h-4 w-4 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                  </svg>
+                  Keywords
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {periodSummary.keywords.map((keyword, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-teal-100 text-teal-800 border border-teal-200 shadow-sm"
+                    >
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {periodSummary.topics && periodSummary.topics.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                  </svg>
+                  Topics
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {periodSummary.topics.map((topic, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-200 shadow-sm"
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )} */}
 
         {/* Key Figures Section */}
         {profile.figures && profile.figures.length > 0 && (

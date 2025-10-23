@@ -257,16 +257,20 @@ class NewspaperScraper:
             party_mentioned = False
             figures_found = []
             
-            # Check if party name is mentioned
+            # Check if party name is mentioned (exact match with word boundaries)
             for party_name in party_data["party_names"]:
-                if party_name.lower() in text_lower:
+                # Use word boundaries to ensure exact match
+                # This prevents "Bangladesh Nationalist" from matching "Bangladesh Nationalist Party"
+                pattern = r'\b' + re.escape(party_name.lower()) + r'\b'
+                if re.search(pattern, text_lower):
                     party_mentioned = True
                     break
             
-            # Check if any figure is mentioned
+            # Check if any figure is mentioned (exact match with word boundaries)
             for figure_canonical, figure_variants in party_data["figures"].items():
                 for variant in figure_variants:
-                    if variant.lower() in text_lower:
+                    pattern = r'\b' + re.escape(variant.lower()) + r'\b'
+                    if re.search(pattern, text_lower):
                         # Use canonical name (first one in the list)
                         if figure_canonical not in figures_found:
                             figures_found.append(figure_canonical)

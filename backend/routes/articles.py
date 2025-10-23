@@ -259,43 +259,101 @@ async def summarize_article(article_id: str):
         article_content = result['documents'][0]
         article_metadata = result['metadatas'][0] if result.get('metadatas') else {}
         
-        # Generate summary using LLM
-        llm = LLMGenerator()
+        # Detect if content is in Bangla
+        is_bangla = any('\u0980' <= char <= '\u09FF' for char in article_content[:500])
+        language = "Bangla" if is_bangla else "English"
         
-        # Check if content is in Bangla or English
-        is_bangla = any('\u0980' <= char <= '\u09FF' for char in article_content[:200])
+        logger.info(f"Detected language: {language} for article {article_id}")
         
-        # Simple prompt - only ask for summary, no extra words
-        if is_bangla:
-            prompt = f"নিচের আর্টিকেলটি ৩-৪টি সংক্ষিপ্ত বাক্যে সংক্ষেপে বলুন (শুধুমাত্র বাংলায় উত্তর দিন):\n\n{article_content}"
-        else:
-            prompt = f"Summarize the following article in 3-4 concise sentences:\n\n{article_content}"
+        # Generate comprehensive summary using LLM (with retry mechanism)
+        llm = LLMGenerator(model="gpt-4o-mini")  # Using gpt-4o-mini for better Bangla support
         
-        logger.info(f"Sending summarization request to LLM for article {article_id} (Language: {'Bangla' if is_bangla else 'English'})")
-        summary = llm._call_llm(prompt)
+        logger.info(f"Sending summarization request to LLM for article {article_id}")
         
-        logger.info(f"Successfully generated summary for article {article_id}")
+        # Use generate_speech_summary which includes keywords, topics, and stance_analysis
+        # Implement retry logic for Gemini 500 errors
+        import asyncio
+        max_retries = 3
+        retry_delay = 2  # seconds
         
-        # Update the article in database with the summary
-        # Keep original content in metadata for future reference
+        summary_result = None
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Attempt {attempt + 1}/{max_retries} to generate summary for article {article_id} (Language: {language})")
+                summary_result = llm.generate_speech_summary(
+                    article_content,
+                    article_title=article_metadata.get("title"),
+                    language=language
+                )
+                logger.info(f"Successfully generated summary for article {article_id}")
+                break  # Success, exit retry loop
+            except Exception as e:
+                last_error = e
+                error_msg = str(e)
+                logger.warning(f"Attempt {attempt + 1} failed for article {article_id}: {error_msg}")
+                
+                # Check if it's a retryable error (500, rate limit, etc.)
+                is_retryable = "500" in error_msg or "Internal" in error_msg or "rate" in error_msg.lower()
+                
+                if is_retryable and attempt < max_retries - 1:
+                    sleep_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                    logger.info(f"Retrying in {sleep_time} seconds...")
+                    await asyncio.sleep(sleep_time)
+                elif is_retryable:
+                    logger.error(f"All {max_retries} attempts failed for article {article_id}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Failed to generate summary after {max_retries} attempts: {error_msg}"
+                    )
+                else:
+                    # Non-retryable error, raise immediately
+                    raise
+        
+        if summary_result is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to generate summary: {str(last_error)}"
+            )
+        
+        # Extract components from structured result
+        summary_text = summary_result.get('summary', '')
+        key_points = summary_result.get('key_points', [])
+        keywords = summary_result.get('keywords', [])
+        topics = summary_result.get('topics', [])
+        stance_analysis = summary_result.get('stance_analysis', '')
+        
+        # Convert lists to comma-separated strings for ChromaDB compatibility
+        # ChromaDB only accepts: str, int, float, bool, or None
+        key_points_str = ", ".join(key_points) if key_points else None
+        keywords_str = ", ".join(keywords) if keywords else None
+        topics_str = ", ".join(topics) if topics else None
+        
+        # Update the article in database with the comprehensive summary
         try:
             # Backup original content if not already backed up
             if "original_content" not in article_metadata:
                 article_metadata["original_content"] = article_content
             
-            # Mark as summarized
-            article_metadata["is_summarized"] = True
-            article_metadata["summary"] = summary
+            # Mark as summarized and store all LLM-generated data
+            article_metadata["is_summarized"] = "True"  # Store as string for ChromaDB compatibility
+            article_metadata["llm_key_points"] = key_points_str  # Store as comma-separated string
+            article_metadata["llm_keywords"] = keywords_str  # Store as comma-separated string
+            article_metadata["llm_topics"] = topics_str  # Store as comma-separated string
+            article_metadata["llm_stance_analysis"] = stance_analysis
+            article_metadata["original_content"] = article_content  # Backup original content in metadata
             from datetime import datetime
             article_metadata["summarized_at"] = datetime.now().isoformat()
             
-            # Update database - summary as main document, original in metadata
+            # IMPORTANT: Replace article content with summary permanently
+            # After summarization, the article document itself becomes the summary
             db.collection.update(
                 ids=[article_id],
-                documents=[summary],
+                documents=[summary_text],  # Replace original with summary
                 metadatas=[article_metadata]
             )
-            logger.info(f"Updated article {article_id} in database with generated summary (original preserved in metadata)")
+            logger.info(f"Updated article {article_id} metadata with summary, keywords ({len(keywords)}), topics ({len(topics)}), and stance analysis")
         except Exception as update_error:
             logger.error(f"Failed to update article in database: {update_error}")
             # Continue anyway, at least return the summary
@@ -304,9 +362,13 @@ async def summarize_article(article_id: str):
             "success": True,
             "article_id": article_id,
             "title": article_metadata.get("title", "No title"),
-            "summary": summary,
+            "summary": summary_text,
+            "key_points": key_points,
+            "keywords": keywords,
+            "topics": topics,
+            "stance_analysis": stance_analysis,
             "original_length": len(article_content),
-            "summary_length": len(summary),
+            "summary_length": len(summary_text),
             "stored_in_db": True
         }
         

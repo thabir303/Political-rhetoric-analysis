@@ -2,8 +2,9 @@
 LLM Generation Module for Political Speech Analysis
 
 Supports multiple LLM providers:
-1. Google Gemini (gemini-2.0-flash-exp, gemini-1.5-pro, etc.)
-2. Groq API with LLaMA models
+1. OpenAI (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo)
+2. Google Gemini (gemini-2.0-flash-exp, gemini-1.5-pro, etc.)
+3. Groq API with LLaMA models
 
 Generates:
 1. Political speech summaries with context about stances
@@ -22,6 +23,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Try to import dependencies
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.warning("openai not available. Install with: pip install openai")
+
 try:
     from groq import Groq
     GROQ_AVAILABLE = True
@@ -53,6 +61,7 @@ class LLMGenerator:
     LLM-based generator for political speech summaries and keywords.
     
     Supports multiple LLM providers:
+    - OpenAI (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo)
     - Google Gemini (gemini-2.0-flash-exp, gemini-1.5-pro, etc.)
     - Groq API with LLaMA models
     """
@@ -60,20 +69,21 @@ class LLMGenerator:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-2.5-flash",
-        provider: str = "gemini",
+        model: str = "gpt-4o-mini",
+        provider: str = "openai",
         temperature: float = 0.3,
-        max_tokens: int = 2000
+        max_tokens: int = 10000
     ):
         """
         Initialize the LLM generator.
         
         Args:
-            api_key: API key (defaults to GEMINI_API_KEY or GROQ_API_KEY env variable)
+            api_key: API key (defaults to OPENAI_API_KEY, GEMINI_API_KEY or GROQ_API_KEY env variable)
             model: Model name 
+                   - OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo
                    - Gemini: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
                    - Groq: llama-3.3-70b-versatile, llama-3.1-8b-instant
-            provider: LLM provider ("gemini" or "groq")
+            provider: LLM provider ("openai", "gemini" or "groq")
             temperature: Sampling temperature (0.0-1.0, lower = more focused)
             max_tokens: Maximum tokens to generate
         """
@@ -83,7 +93,22 @@ class LLMGenerator:
         self.max_tokens = max_tokens
         
         # Initialize based on provider
-        if self.provider == "gemini":
+        if self.provider == "openai":
+            if not OPENAI_AVAILABLE:
+                raise ImportError("openai not installed. Install with: pip install openai")
+            
+            # Get OpenAI API key
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+            if not self.api_key:
+                raise ValueError(
+                    "OpenAI API key not found. Provide via api_key parameter or OPENAI_API_KEY environment variable."
+                )
+            
+            # Initialize OpenAI client
+            self.client = OpenAI(api_key=self.api_key)
+            logger.info(f"LLM Generator initialized with OpenAI model: {model}")
+            
+        elif self.provider == "gemini":
             if not GEMINI_AVAILABLE:
                 raise ImportError("google-generativeai not installed. Install with: pip install google-generativeai")
             
@@ -137,7 +162,42 @@ class LLMGenerator:
             Generated text
         """
         try:
-            if self.provider == "gemini":
+            if self.provider == "openai":
+                # OpenAI API call
+                messages = []
+                
+                if system_prompt:
+                    messages.append({
+                        "role": "system",
+                        "content": system_prompt
+                    })
+                
+                messages.append({
+                    "role": "user",
+                    "content": prompt
+                })
+                
+                # Use max_completion_tokens for newer models (gpt-4o, o1, etc.)
+                # Use max_tokens for older models (gpt-3.5-turbo, gpt-4-turbo)
+                completion_params = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": temperature or self.temperature,
+                    "top_p": 1
+                }
+                
+                # Check if using newer models that require max_completion_tokens
+                if any(model_prefix in self.model for model_prefix in ["gpt-4o", "o1", "gpt-5"]):
+                    completion_params["max_completion_tokens"] = max_tokens or self.max_tokens
+                else:
+                    completion_params["max_tokens"] = max_tokens or self.max_tokens
+                
+                response = self.client.chat.completions.create(**completion_params)
+                
+                generated_text = response.choices[0].message.content.strip()
+                logger.info(f"OpenAI response received successfully")
+                
+            elif self.provider == "gemini":
                 # Gemini API call
                 # Combine system and user prompts
                 full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
@@ -313,9 +373,15 @@ Article Content:
 দয়া করে প্রদান করুন:
 1. **Summary** (সারসংক্ষেপ): বক্তৃতার মূল বিষয়বস্তু (২-৩ বাক্য)
 2. **Key Points** (মূল পয়েন্ট): গুরুত্বপূর্ণ পয়েন্টগুলির তালিকা (৩-৫টি)
-3. **Stance Analysis** (অবস্থান বিশ্লেষণ): প্রধান ইশুতে রাজনৈতিক অবস্থান (২-৩ বাক্য)
+3. **Keywords** (মূল শব্দ): রাজনৈতিকভাবে গুরুত্বপূর্ণ শব্দ (৫-৮টি) - শুধুমাত্র বিষয়, ইস্যু, ধারণা (ব্যক্তি/দল/দেশের নাম নয়)
+4. **Topics Covered** (আলোচিত বিষয়): প্রধান রাজনৈতিক বিষয়সমূহ (৩-৫টি) - নির্বাচন, সংস্কার, নিরাপত্তা ইত্যাদি
+5. **Stance Analysis** (অবস্থান বিশ্লেষণ): প্রধান ইশুতে রাজনৈতিক অবস্থান (২-৩ বাক্য)
 
-IMPORTANT: সম্পূর্ণ উত্তর অবশ্যই বাংলায় দিন। ইংরেজি একটি শব্দও ব্যবহার করবেন না। Clear sections ব্যবহার করুন।"""
+IMPORTANT: 
+- সম্পূর্ণ উত্তর অবশ্যই বাংলায় দিন
+- Keywords এবং Topics এ ব্যক্তি, দল, বা দেশের নাম ব্যবহার করবেন না
+- রাজনৈতিক ধারণা, নীতি, এবং ইস্যু focus করুন
+- Clear sections ব্যবহার করুন"""
         else:
             user_prompt = f"""Analyze the following political speech/statement in the context of Bangladeshi politics.
 
@@ -327,9 +393,15 @@ Article Content:
 Please provide:
 1. **Summary**: A concise summary of the speech (2-3 sentences)
 2. **Key Points**: List of main arguments or points made (3-5 bullet points)
-3. **Stance Analysis**: Analysis of the political figure's stance on key issues mentioned (2-3 sentences)
+3. **Keywords**: Politically significant keywords (5-8 words) - ONLY concepts, issues, policies (NO names of people/parties/countries)
+4. **Topics Covered**: Main political topics discussed (3-5 topics) - e.g., elections, reforms, security, democracy
+5. **Stance Analysis**: Analysis of the political figure's stance on key issues mentioned (2-3 sentences)
 
-Use clear section headers in your response."""
+IMPORTANT:
+- For Keywords and Topics, focus ONLY on political concepts, policies, and issues
+- DO NOT include names of individuals, political parties, or countries
+- Focus on themes like: election reform, judicial independence, corruption, democracy, governance, etc.
+- Use clear section headers in your response"""
         
         # Call LLM
         try:
@@ -562,6 +634,8 @@ Provide ONLY the lists, no explanations. Each item on a new line."""
         result = {
             'summary': '',
             'key_points': [],
+            'keywords': [],
+            'topics': [],
             'stance_analysis': '',
             'raw_response': response  # Keep raw response for debugging
         }
@@ -594,13 +668,25 @@ Provide ONLY the lists, no explanations. Each item on a new line."""
             
             # Key points section - handle both English and Bangla headers
             elif any(marker in line_lower for marker in ['## key point', '**key point', '2. key point', '2. **key', 'key points:',
-                                                         '**মূল পয়েন্ট**', 'মূল পয়েন্ট:', '## মূল পয়েন্ট']):
+                                                         '**মূল পয়েন্ট**', 'মূল পয়েন্ট:', '## মূল পয়েন্ট', '২. মূল পয়েন্ট']):
                 current_section = 'key_points'
                 continue
             
+            # Keywords section - NEW
+            elif any(marker in line_lower for marker in ['## keyword', '**keyword', '3. keyword', '3. **keyword', 'keywords:',
+                                                         '**মূল শব্দ**', 'মূল শব্দ:', '## মূল শব্দ', '৩. মূল শব্দ']):
+                current_section = 'keywords'
+                continue
+            
+            # Topics section - NEW  
+            elif any(marker in line_lower for marker in ['## topic', '**topic', '4. topic', '4. **topic', 'topics covered:', 'topics:',
+                                                         '**আলোচিত বিষয়**', 'আলোচিত বিষয়:', '## আলোচিত বিষয়', '৪. আলোচিত বিষয়']):
+                current_section = 'topics'
+                continue
+            
             # Stance analysis section - handle both English and Bangla headers
-            elif any(marker in line_lower for marker in ['## stance', '**stance', '3. stance', '3. **stance', 'stance analysis:',
-                                                         '**অবস্থান বিশ্লেষণ**', 'অবস্থান বিশ্লেষণ:', '## অবস্থান বিশ্লেষণ']):
+            elif any(marker in line_lower for marker in ['## stance', '**stance', '5. stance', '5. **stance', 'stance analysis:',
+                                                         '**অবস্থান বিশ্লেষণ**', 'অবস্থান বিশ্লেষণ:', '## অবস্থান বিশ্লেষণ', '৫. অবস্থান বিশ্লেষণ']):
                 current_section = 'stance_analysis'
                 # Try to extract stance from same line
                 if ':' in line_stripped:
@@ -630,6 +716,26 @@ Provide ONLY the lists, no explanations. Each item on a new line."""
                 if clean_line and not clean_line.startswith('**') and not clean_line.startswith('#') and len(clean_line) > 5:
                     result['key_points'].append(clean_line)
                     print(f"DEBUG: Added key point: {clean_line}")
+            elif current_section == 'keywords':
+                # Parse keywords - can be comma-separated or bullet points
+                clean_line = line_stripped.lstrip('•-*#123456789. ').strip('*_')
+                if clean_line and not clean_line.startswith('**') and not clean_line.startswith('#'):
+                    # Check if comma-separated
+                    if ',' in clean_line:
+                        keywords = [kw.strip() for kw in clean_line.split(',')]
+                        result['keywords'].extend([kw for kw in keywords if kw and len(kw) > 2])
+                    elif clean_line and len(clean_line) > 2:
+                        result['keywords'].append(clean_line)
+            elif current_section == 'topics':
+                # Parse topics - can be comma-separated or bullet points
+                clean_line = line_stripped.lstrip('•-*#123456789. ').strip('*_')
+                if clean_line and not clean_line.startswith('**') and not clean_line.startswith('#'):
+                    # Check if comma-separated
+                    if ',' in clean_line:
+                        topics = [t.strip() for t in clean_line.split(',')]
+                        result['topics'].extend([t for t in topics if t and len(t) > 2])
+                    elif clean_line and len(clean_line) > 2:
+                        result['topics'].append(clean_line)
             elif current_section == 'stance_analysis':
                 # Skip if it's just a header line
                 if not line_stripped.startswith('#'):
@@ -640,16 +746,18 @@ Provide ONLY the lists, no explanations. Each item on a new line."""
         result['stance_analysis'] = ' '.join(stance_buffer)
         
         # Debug parsing results
-        print(f"DEBUG PARSING RESULTS:")
+        print("DEBUG PARSING RESULTS:")
         print(f"  Summary: {len(result['summary'])} chars")
         print(f"  Key Points: {len(result['key_points'])} items")
+        print(f"  Keywords: {len(result['keywords'])} items - {result['keywords']}")
+        print(f"  Topics: {len(result['topics'])} items - {result['topics']}")
         print(f"  Stance Analysis: {len(result['stance_analysis'])} chars")
         if result['key_points']:
             print(f"  Key Points List: {result['key_points']}")
         else:
-            print(f"  No key points found. Raw response lines:")
+            print("  No key points found. Raw response lines:")
             for i, line in enumerate(response.split('\n')[:10]):
-                print(f"    Line {i}: '{line.strip()}'")
+                print(f"    Line {i}: '{line.strip()}')")
         
         # If parsing failed, try to extract something useful from raw response
         if not result['summary'] and not result['key_points']:

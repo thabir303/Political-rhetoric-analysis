@@ -264,11 +264,14 @@ async def query_articles(query_request: QueryRequest):
         # Build response
         results = []
         for i in range(len(ids)):
+            metadata = metadatas[i]
+            
+            # Document content is already the summary if article was summarized
             results.append(
                 ArticleResponse(
                     id=ids[i],
                     content=documents[i],
-                    metadata=metadatas[i],
+                    metadata=metadata,
                     distance=distances[i]
                 )
             )
@@ -298,6 +301,7 @@ async def query_articles(query_request: QueryRequest):
 async def get_article(article_id: str):
     """
     Retrieve a specific article by its ID.
+    If article is summarized, returns summary instead of full content.
     """
     try:
         article = vector_store.get_article_by_id(article_id)
@@ -308,10 +312,13 @@ async def get_article(article_id: str):
                 detail=f"Article with ID {article_id} not found"
             )
         
+        # Document content is already the summary if article was summarized
+        metadata = article["metadata"]
+        
         return ArticleResponse(
             id=article["id"],
             content=article["content"],
-            metadata=article["metadata"]
+            metadata=metadata
         )
         
     except HTTPException:
@@ -1091,6 +1098,7 @@ async def analyze_party_articles(request: PartyAnalysisRequest):
                 if request.end_date and article_date > request.end_date:
                     continue
             
+            # Document content is already the summary if article was summarized
             articles.append({
                 "title": metadata.get("title", ""),
                 "content": doc,
@@ -1206,6 +1214,7 @@ async def analyze_figure_articles(request: FigureAnalysisRequest):
                 if request.end_date and article_date > request.end_date:
                     continue
             
+            # Document content is already the summary if article was summarized
             articles.append({
                 "title": metadata.get("title", ""),
                 "content": doc,
@@ -1421,6 +1430,271 @@ async def get_categorization_test(limit: int = Query(default=50, le=200)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve test data: {str(e)}"
+        )
+
+
+# ==================== Period Summary Endpoints ====================
+
+class PeriodSummaryRequest(BaseModel):
+    """Request model for period summary generation."""
+    entity_type: str  # "party" or "figure"
+    entity_name: str  # Party or figure name
+    start_date: str  # YYYY-MM-DD format
+    end_date: str    # YYYY-MM-DD format
+    max_articles: int = 100
+
+
+@router.post(
+    "/summary/period",
+    tags=["LLM Analysis"],
+    summary="Generate summary of summaries for a date range"
+)
+async def generate_period_summary(request: PeriodSummaryRequest):
+    """
+    Generate comprehensive period summary for a party/figure.
+    
+    Process:
+    1. Find all articles in date range for the entity
+    2. Summarize each article (if not already summarized)
+    3. Generate meta-summary from all individual summaries
+    4. Return period summary with statistics
+    
+    Args:
+        request: PeriodSummaryRequest with entity info and date range
+        
+    Returns:
+        Period summary with individual summaries and meta-summary
+    """
+    try:
+        from backend.core.llm_generation import LLMGenerator
+        from backend.routes.articles import summarize_article
+        
+        logger.info(f"Generating period summary for {request.entity_type}: {request.entity_name}")
+        logger.info(f"Date range: {request.start_date} to {request.end_date}")
+        
+        if enhanced_db is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Vector database not available"
+            )
+        
+        # Build where clause based on entity type
+        if request.entity_type == "party":
+            where_clause = {"parties": {"$contains": request.entity_name}}
+        elif request.entity_type == "figure":
+            where_clause = {"people": {"$contains": request.entity_name}}
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="entity_type must be 'party' or 'figure'"
+            )
+        
+        # Get articles from database
+        results = enhanced_db.collection.get(
+            where=where_clause,
+            limit=request.max_articles * 2,
+            include=["documents", "metadatas", "ids"]
+        )
+        
+        if not results or not results.get("documents"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No articles found for {request.entity_type}: {request.entity_name}"
+            )
+        
+        # Filter by date range and collect articles
+        articles_to_summarize = []
+        article_summaries = []
+        
+        for i, doc in enumerate(results["documents"]):
+            metadata = results["metadatas"][i]
+            article_id = results["ids"][i]
+            article_date = metadata.get("date", "")
+            
+            # Date filtering
+            if article_date < request.start_date or article_date > request.end_date:
+                continue
+            
+            # Check if already summarized
+            is_summarized = str(metadata.get('is_summarized', 'False')).lower() == 'true'
+            
+            if is_summarized:
+                # Already summarized - use existing summary
+                summary_text = doc  # Document is the summary
+                article_summaries.append({
+                    "article_id": article_id,
+                    "title": metadata.get("title", ""),
+                    "date": article_date,
+                    "summary": summary_text,
+                    "already_summarized": True
+                })
+            else:
+                # Not summarized yet - add to list for summarization
+                articles_to_summarize.append({
+                    "id": article_id,
+                    "title": metadata.get("title", ""),
+                    "date": article_date,
+                    "content": doc
+                })
+        
+        logger.info(f"Found {len(article_summaries)} already summarized, {len(articles_to_summarize)} to summarize")
+        
+        # Summarize articles that haven't been summarized yet
+        llm_generator = LLMGenerator()
+        
+        for article in articles_to_summarize:
+            try:
+                logger.info(f"Summarizing: {article['title'][:60]}...")
+                
+                # Generate summary using LLM
+                summary_result = llm_generator.generate_summary(
+                    title=article['title'],
+                    content=article['content']
+                )
+                
+                # Update article in database with summary
+                article_metadata = enhanced_db.collection.get(
+                    ids=[article['id']],
+                    include=["metadatas"]
+                )['metadatas'][0]
+                
+                # Store LLM results in metadata
+                article_metadata["is_summarized"] = "True"
+                article_metadata["llm_key_points"] = ", ".join(summary_result.get('key_points', []))
+                article_metadata["llm_keywords"] = ", ".join(summary_result.get('keywords', []))
+                article_metadata["llm_topics"] = ", ".join(summary_result.get('topics', []))
+                article_metadata["llm_stance_analysis"] = summary_result.get('stance_analysis', '')
+                article_metadata["original_content"] = article['content']
+                
+                # Update database - replace document with summary
+                enhanced_db.collection.update(
+                    ids=[article['id']],
+                    documents=[summary_result.get('summary', '')],
+                    metadatas=[article_metadata]
+                )
+                
+                # Add to summaries list
+                article_summaries.append({
+                    "article_id": article['id'],
+                    "title": article['title'],
+                    "date": article['date'],
+                    "summary": summary_result.get('summary', ''),
+                    "already_summarized": False
+                })
+                
+                logger.info(f"✓ Summarized and updated: {article['title'][:60]}")
+                
+                # Small delay to avoid rate limits
+                import asyncio
+                await asyncio.sleep(1)
+                
+            except Exception as e:
+                logger.error(f"Failed to summarize article {article['id']}: {e}")
+                # Continue with other articles
+                continue
+        
+        if not article_summaries:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No articles found in date range {request.start_date} to {request.end_date}"
+            )
+        
+        # Sort by date
+        article_summaries.sort(key=lambda x: x['date'])
+        
+        # Generate meta-summary from all summaries
+        logger.info(f"Generating meta-summary from {len(article_summaries)} summaries...")
+        
+        combined_summaries = "\n\n".join([
+            f"Date: {s['date']}\nTitle: {s['title']}\nSummary: {s['summary']}"
+            for s in article_summaries
+        ])
+        
+        # Generate period summary with structured analysis using LLM
+        period_summary_prompt = f"""Analyze the following article summaries for {request.entity_name} from {request.start_date} to {request.end_date}.
+
+Article Summaries:
+{combined_summaries}
+
+Generate a comprehensive analysis in the following format:
+
+SUMMARY:
+[Write a concise 200-300 word summary capturing overall theme, major events, trends, and impacts]
+
+KEY POINTS:
+- [Key point 1]
+- [Key point 2]
+- [Key point 3]
+[Add 5-8 most important points]
+
+KEYWORDS:
+[List 8-12 most relevant keywords/phrases separated by commas]
+
+TOPICS:
+[List 5-8 main topics/themes separated by commas]"""
+        
+        meta_analysis = llm_generator.generate_text(period_summary_prompt)
+        
+        # Parse the structured response
+        meta_summary = ""
+        key_points = []
+        keywords = []
+        topics = []
+        
+        try:
+            sections = meta_analysis.split('\n\n')
+            current_section = None
+            
+            for section in sections:
+                section = section.strip()
+                if section.startswith('SUMMARY:'):
+                    meta_summary = section.replace('SUMMARY:', '').strip()
+                elif section.startswith('KEY POINTS:'):
+                    points_text = section.replace('KEY POINTS:', '').strip()
+                    key_points = [p.strip('- ').strip() for p in points_text.split('\n') if p.strip().startswith('-')]
+                elif section.startswith('KEYWORDS:'):
+                    keywords_text = section.replace('KEYWORDS:', '').strip()
+                    keywords = [k.strip() for k in keywords_text.split(',') if k.strip()]
+                elif section.startswith('TOPICS:'):
+                    topics_text = section.replace('TOPICS:', '').strip()
+                    topics = [t.strip() for t in topics_text.split(',') if t.strip()]
+        except Exception as e:
+            logger.warning(f"Failed to parse structured response: {e}")
+            meta_summary = meta_analysis
+        
+        # Calculate statistics
+        total_articles = len(article_summaries)
+        newly_summarized = len([s for s in article_summaries if not s.get('already_summarized', False)])
+        
+        return {
+            "success": True,
+            "entity_type": request.entity_type,
+            "entity_name": request.entity_name,
+            "date_range": {
+                "start": request.start_date,
+                "end": request.end_date
+            },
+            "statistics": {
+                "total_articles": total_articles,
+                "newly_summarized": newly_summarized,
+                "already_summarized": total_articles - newly_summarized
+            },
+            "period_summary": meta_summary,
+            "key_points": key_points,
+            "keywords": keywords,
+            "topics": topics,
+            "individual_summaries": article_summaries,
+            "earliest_date": article_summaries[0]['date'] if article_summaries else None,
+            "latest_date": article_summaries[-1]['date'] if article_summaries else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Period summary generation failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate period summary: {str(e)}"
         )
 
 

@@ -664,25 +664,53 @@ class VectorDatabase:
         summaries_by_date = {}
         
         for article in articles:
+            # Extract metadata first
+            metadata = article.get('metadata', {})
+            
             # Extract core information
             article_data = {
                 'id': article.get('id'),
-                'title': article['metadata'].get('title', ''),
-                'date': article['metadata'].get('date', ''),
-                'source': article['metadata'].get('source', ''),
+                'title': metadata.get('title', ''),
+                'date': metadata.get('date', ''),
+                'source': metadata.get('source', ''),
                 'similarity': article.get('similarity', 0),
                 'parties': article.get('parties', []),
                 'people': article.get('people', []),
                 'is_speech': article.get('is_speech', False),
-                'url': article['metadata'].get('url', '')
+                'is_summarized': str(metadata.get('is_summarized', 'False')).lower() == 'true',  # Convert to boolean
+                'url': metadata.get('url', '')
             }
             
-            # Add LLM summary if available
-            if 'llm_summary' in article:
+            # Add LLM summary and related data
+            # If article is summarized, document itself is the summary
+            is_summarized = str(metadata.get('is_summarized', 'False')).lower() == 'true'
+            if is_summarized:
+                # Document is the summary, get other LLM data from metadata
+                article_data['summary'] = article.get('document', '')
+                
+                # Get key_points from metadata
+                if 'llm_key_points' in metadata and metadata['llm_key_points']:
+                    article_data['key_points'] = [p.strip() for p in str(metadata['llm_key_points']).split(',') if p.strip()]
+                else:
+                    article_data['key_points'] = []
+                
+                # Get stance_analysis from metadata  
+                if 'llm_stance_analysis' in metadata and metadata['llm_stance_analysis']:
+                    article_data['stance_analysis'] = metadata['llm_stance_analysis']
+                else:
+                    article_data['stance_analysis'] = None
+                    
+            elif 'llm_summary' in article:
+                # Old format: llm_summary object exists
                 llm = article['llm_summary']
                 article_data['summary'] = llm.get('summary', '')
                 article_data['key_points'] = llm.get('key_points', [])
                 article_data['stance_analysis'] = llm.get('stance_analysis', '')
+            else:
+                # No LLM summary available, set defaults
+                article_data['summary'] = ''
+                article_data['key_points'] = []
+                article_data['stance_analysis'] = ''
                 
                 # Group summaries by date
                 date = article_data['date']
@@ -697,15 +725,32 @@ class VectorDatabase:
                         'title': article_data['title']
                     })
             
-            # Add LLM keywords if available
-            if 'llm_keywords' in article:
+            # Add LLM keywords and topics
+            if is_summarized:
+                # Get keywords and topics directly from metadata
+                if 'llm_keywords' in metadata and metadata['llm_keywords']:
+                    article_data['keywords'] = [k.strip() for k in str(metadata['llm_keywords']).split(',') if k.strip()]
+                else:
+                    article_data['keywords'] = []
+                
+                if 'llm_topics' in metadata and metadata['llm_topics']:
+                    article_data['topics'] = [t.strip() for t in str(metadata['llm_topics']).split(',') if t.strip()]
+                else:
+                    article_data['topics'] = []
+                    
+                article_data['key_phrases'] = []  # Not stored separately in new format
+                
+            elif 'llm_keywords' in article:
+                # Old format: llm_keywords object exists
                 llm_kw = article['llm_keywords']
                 article_data['keywords'] = llm_kw.get('keywords', [])
                 article_data['key_phrases'] = llm_kw.get('phrases', [])
                 article_data['topics'] = llm_kw.get('topics', [])
             else:
-                # Fallback to regular keywords
+                # Fallback to regular keywords or set defaults
                 article_data['keywords'] = article.get('keywords', [])
+                article_data['key_phrases'] = []
+                article_data['topics'] = []
             
             organized_articles.append(article_data)
         
@@ -848,16 +893,19 @@ class VectorDatabase:
         
         # Format each result
         for i in range(len(ids)):
+            metadata = metadatas[i] if i < len(metadatas) else {}
+            document_content = documents[i] if i < len(documents) else ''
+            
             article = {
                 'id': ids[i],
-                'document': documents[i] if i < len(documents) else '',
-                'metadata': metadatas[i] if i < len(metadatas) else {},
+                'document': document_content,
+                'metadata': metadata,
                 'distance': distances[i] if i < len(distances) else None,
                 'similarity': 1 - distances[i] if i < len(distances) else None  # Convert distance to similarity
             }
             
             # Parse metadata fields
-            metadata = article['metadata']
+            # metadata = article['metadata']  # Already extracted above
             
             # Parse comma-separated lists back to lists
             if 'parties' in metadata:
@@ -879,7 +927,7 @@ class VectorDatabase:
             if 'is_stance' in metadata:
                 article['is_stance'] = metadata['is_stance'].lower() == 'true'
             
-            # Parse LLM-generated summaries
+            # Parse LLM-generated summaries and metadata
             llm_summary = {}
             if 'llm_summary' in metadata:
                 llm_summary['summary'] = metadata['llm_summary']
@@ -887,7 +935,10 @@ class VectorDatabase:
             if 'llm_key_points' in metadata:
                 llm_summary['key_points'] = [p.strip() for p in metadata['llm_key_points'].split(',') if p.strip()]
             
-            if 'llm_stance' in metadata:
+            # Check both old and new field names for stance analysis
+            if 'llm_stance_analysis' in metadata:
+                llm_summary['stance_analysis'] = metadata['llm_stance_analysis']
+            elif 'llm_stance' in metadata:
                 llm_summary['stance_analysis'] = metadata['llm_stance']
             
             if 'llm_figure' in metadata:
@@ -899,9 +950,12 @@ class VectorDatabase:
             if llm_summary:
                 article['llm_summary'] = llm_summary
             
-            # Parse LLM-generated keywords
+            # Parse LLM-generated keywords and topics
             llm_keywords = {}
-            if 'llm_extra_keywords' in metadata:
+            # Check both old and new field names for keywords
+            if 'llm_keywords' in metadata:
+                llm_keywords['keywords'] = [k.strip() for k in metadata['llm_keywords'].split(',') if k.strip()]
+            elif 'llm_extra_keywords' in metadata:
                 llm_keywords['keywords'] = [k.strip() for k in metadata['llm_extra_keywords'].split(',') if k.strip()]
             
             if 'llm_phrases' in metadata:

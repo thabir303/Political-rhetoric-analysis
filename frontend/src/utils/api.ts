@@ -490,3 +490,61 @@ export async function fetchCategorizationTest(limit: number = 50) {
     return handleApiError(error, 'Fetch categorization test data')
   }
 }
+
+/**
+ * Generate period summary for a party or figure with date range
+ * 
+ * @param entityType - "party" or "figure"
+ * @param entityName - Name of party or figure
+ * @param startDate - Start date in YYYY-MM-DD format
+ * @param endDate - End date in YYYY-MM-DD format
+ * @param maxArticles - Maximum articles to analyze (default: 100)
+ * @returns Promise with period summary including meta-summary and individual summaries
+ * 
+ * @example
+ * ```typescript
+ * const summary = await generatePeriodSummary("party", "BNP", "2025-10-01", "2025-10-21")
+ * console.log(summary.period_summary)
+ * console.log(`Analyzed ${summary.statistics.total_articles} articles`)
+ * ```
+ */
+export async function generatePeriodSummary(
+  entityType: 'party' | 'figure',
+  entityName: string,
+  startDate: string,
+  endDate: string,
+  maxArticles: number = 100
+) {
+  try {
+    const response = await apiClient.post('/analysis/summary/period', {
+      entity_type: entityType,
+      entity_name: entityName,
+      start_date: startDate,
+      end_date: endDate,
+      max_articles: maxArticles
+    })
+    return response.data
+  } catch (error) {
+    return handleApiError(error, `Generate period summary for ${entityName}`)
+  }
+}
+
+/**
+ * Get all stored period summaries for an entity
+ * 
+ * @param entityType - Type of entity ("party" or "figure")
+ * @param entityName - Name of the party or figure
+ * @returns Promise with all period summaries for the entity
+ */
+export async function getPeriodSummaries(
+  entityType: 'party' | 'figure',
+  entityName: string
+) {
+  try {
+    const response = await apiClient.get(`/analysis/summary/period/${entityType}/${entityName}`)
+    return response.data
+  } catch (error) {
+    return handleApiError(error, `Get period summaries for ${entityName}`)
+  }
+}
+
