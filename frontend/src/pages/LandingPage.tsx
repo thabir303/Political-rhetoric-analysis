@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Newspaper, Users, Search, Database, FileSearch } from 'lucide-react';
+import { Newspaper, Users, Search, Database, MessageSquare, FileSearch } from 'lucide-react';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -32,6 +32,13 @@ const LandingPage = () => {
       description: 'View and manage articles stored in the vector database',
       path: '/database',
       color: 'from-orange-500 to-orange-600'
+    },
+    {
+      icon: <MessageSquare className=" " />,
+      title: 'AI Chatbot',
+      description: 'Ask questions about Bangladesh politics and get AI-powered answers',
+      path: '/chatbot',
+      color: 'from-pink-500 to-pink-600'
     }
   ];
 

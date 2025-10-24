@@ -57,6 +57,15 @@ async def startup_event():
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"ChromaDB persist directory: {settings.chroma_persist_directory}")
     logger.info(f"Embedding model: {settings.embedding_model}")
+    
+    # Initialize chatbot components
+    try:
+        logger.info("Initializing chatbot components...")
+        from backend.routes.chatbot import initialize_chatbot_components
+        initialize_chatbot_components()
+        logger.info("✓ Chatbot components initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize chatbot: {e}")
 
 
 @app.on_event("shutdown")

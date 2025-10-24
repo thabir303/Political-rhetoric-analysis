@@ -515,8 +515,16 @@ class VectorDatabase:
         
         # Query the collection
         try:
+            # If using list-based filters (parties, people, themes), fetch more results
+            # since we'll post-filter in Python
+            fetch_count = top_k
+            if filter_parties or filter_people or filter_themes:
+                # Fetch 5x more results to ensure we have enough after filtering
+                fetch_count = min(top_k * 5, 100)  # Cap at 100 to avoid performance issues
+                logger.info(f"Fetching {fetch_count} results for post-filtering (requested: {top_k})")
+            
             query_params = {
-                "n_results": top_k
+                "n_results": fetch_count
             }
             
             # Add where clause if present
@@ -539,8 +547,7 @@ class VectorDatabase:
             # Format results
             formatted_results = self._format_results(results)
             
-            # Post-process filtering for list-based fields
-            # (since ChromaDB's where_document is less precise)
+            # Post-filter for parties, people, themes (since ChromaDB doesn't support substring matching)
             if filter_parties or filter_people or filter_themes:
                 formatted_results = self._post_filter_results(
                     formatted_results,
@@ -548,6 +555,8 @@ class VectorDatabase:
                     filter_people=filter_people,
                     filter_themes=filter_themes
                 )
+                # Trim to requested top_k after filtering
+                formatted_results = formatted_results[:top_k]
             
             logger.info(f"Retrieved {len(formatted_results)} similar articles")
             
@@ -789,10 +798,13 @@ class VectorDatabase:
         """
         Build ChromaDB where clause for filtering.
         
-        Note: ChromaDB has limitations:
-        - $or requires at least 2 expressions
-        - Comparisons only work on numeric/string fields
-        - We use post-filtering for complex list-based queries
+        Note: ChromaDB metadata limitations:
+        - Only supports: str, int, float, bool (no lists)
+        - Operators: $gt, $gte, $lt, $lte, $ne, $eq, $in, $nin
+        - NO $contains operator!
+        
+        For list-based fields (parties, people, themes) stored as comma-separated strings,
+        we use post-filtering in Python since ChromaDB doesn't support substring matching.
         
         Returns:
             Tuple of (where_clause, where_document)
@@ -800,29 +812,9 @@ class VectorDatabase:
         where_document = None
         conditions = []
         
-        # For list-based filters, collect terms for where_document
-        document_filters = []
-        
-        if filter_parties:
-            for party in filter_parties:
-                document_filters.append({"$contains": party})
-        
-        if filter_people:
-            for person in filter_people:
-                document_filters.append({"$contains": person})
-        
-        if filter_themes:
-            for theme in filter_themes:
-                document_filters.append({"$contains": theme})
-        
-        # Build where_document with proper $or handling
-        if document_filters:
-            if len(document_filters) == 1:
-                # Single filter - use directly without $or
-                where_document = document_filters[0]
-            else:
-                # Multiple filters - use $or
-                where_document = {"$or": document_filters}
+        # NOTE: parties, people, themes filtering done via post-processing
+        # because they're stored as comma-separated strings and ChromaDB
+        # doesn't support substring matching ($contains doesn't work)
         
         # Category filter
         if filter_category:

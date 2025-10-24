@@ -160,11 +160,10 @@ async def analyze_articles_with_llm(request: LLMAnalysisRequest):
         # Initialize LLM
         try:
             llm = LLMGenerator(
-                model="gemini-2.5-flash",
-                provider="gemini",
+                model="gpt-4o-mini",
                 temperature=0.3
             )
-            logger.info("LLM Generator initialized with Gemini")
+            logger.info("LLM Generator initialized with gpt-4o-mini")
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {e}")
             raise HTTPException(

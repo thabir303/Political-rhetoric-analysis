@@ -68,29 +68,42 @@ class LLMGenerator:
     
     def __init__(
         self,
-        api_key: Optional[str] = None,
         model: str = "gpt-4o-mini",
-        provider: str = "openai",
         temperature: float = 0.3,
-        max_tokens: int = 10000
+        max_tokens: int = 2000,
+        api_key: Optional[str] = None,
+        provider: Optional[str] = None
     ):
         """
         Initialize the LLM generator.
         
         Args:
-            api_key: API key (defaults to OPENAI_API_KEY, GEMINI_API_KEY or GROQ_API_KEY env variable)
             model: Model name 
-                   - OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo
+                   - OpenAI: gpt-4o, gpt-4o-mini (default), gpt-4-turbo, gpt-3.5-turbo
                    - Gemini: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
                    - Groq: llama-3.3-70b-versatile, llama-3.1-8b-instant
-            provider: LLM provider ("openai", "gemini" or "groq")
             temperature: Sampling temperature (0.0-1.0, lower = more focused)
             max_tokens: Maximum tokens to generate
+            api_key: API key (defaults to OPENAI_API_KEY, GEMINI_API_KEY or GROQ_API_KEY env variable)
+            provider: LLM provider ("openai", "gemini" or "groq")
         """
-        self.provider = provider.lower()
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        
+        # Auto-detect provider if not specified
+        if provider is None:
+            if model.startswith("gpt") or model.startswith("o1"):
+                provider = "openai"
+            elif model.startswith("gemini"):
+                provider = "gemini"
+            elif model.startswith("llama"):
+                provider = "groq"
+            else:
+                # Default to OpenAI for unknown models
+                provider = "openai"
+        
+        self.provider = provider.lower()
         
         # Initialize based on provider
         if self.provider == "openai":
@@ -194,8 +207,17 @@ class LLMGenerator:
                 
                 response = self.client.chat.completions.create(**completion_params)
                 
-                generated_text = response.choices[0].message.content.strip()
-                logger.info(f"OpenAI response received successfully")
+                generated_text = response.choices[0].message.content
+                
+                # Debug log for empty responses
+                if not generated_text or len(generated_text.strip()) == 0:
+                    logger.warning(f"⚠️ Empty response from {self.model}")
+                    logger.warning(f"Response object: {response}")
+                    logger.warning(f"Finish reason: {response.choices[0].finish_reason}")
+                    logger.warning(f"Completion params: {completion_params}")
+                
+                generated_text = generated_text.strip() if generated_text else ""
+                logger.info(f"OpenAI response received successfully (length: {len(generated_text)} chars)")
                 
             elif self.provider == "gemini":
                 # Gemini API call
@@ -275,6 +297,13 @@ class LLMGenerator:
                 )
                 
                 generated_text = response.choices[0].message.content.strip()
+            
+            # Validate response is not empty
+            if not generated_text or len(generated_text.strip()) == 0:
+                error_msg = f"⚠️ Empty response from {self.model}. This model may not be supported or may have issues."
+                logger.error(error_msg)
+                logger.error(f"Finish reason: {response.choices[0].finish_reason}")
+                raise ValueError(f"Empty response from model {self.model}. Please verify the model name is correct and supported by OpenAI.")
             
             # Print complete LLM response to terminal
             print("\n" + "="*80)
