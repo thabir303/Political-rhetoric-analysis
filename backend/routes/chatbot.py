@@ -154,10 +154,18 @@ async def chat(request: ChatRequest):
         logger.info(f"Retrieved {len(articles)} articles")
         
         if not articles:
-            # No articles found
+            # No articles found - Generate answer using LLM's general knowledge
+            logger.warning("No articles found. Using LLM general knowledge...")
+            answer = await generate_answer(
+                query=request.query,
+                context="No specific articles found in database.",
+                intent=intent,
+                language=request.language
+            )
+            
             return ChatResponse(
                 query=request.query,
-                answer="I couldn't find any relevant articles in the database to answer your question. Please try rephrasing your query or ask about a different topic.",
+                answer=answer,
                 intent=intent,
                 sources=[],
                 total_articles_retrieved=0,
@@ -182,12 +190,19 @@ async def chat(request: ChatRequest):
         sources = []
         if request.include_sources:
             for article in articles[:10]:  # Top 10 sources
+                # Extract from metadata if not in top-level
+                metadata = article.get('metadata', {})
+                title = article.get('title') or metadata.get('title', 'N/A')
+                date = article.get('date') or metadata.get('date', 'N/A')
+                source = article.get('source') or metadata.get('source', 'N/A')
+                url = article.get('url') or metadata.get('url')
+                
                 sources.append(SourceArticle(
-                    title=article.get('title', 'N/A'),
-                    date=article.get('date', 'N/A'),
-                    source=article.get('source', 'N/A'),
-                    url=article.get('url'),
-                    relevance_score=article.get('rerank_score')
+                    title=title,
+                    date=date,
+                    source=source,
+                    url=url,
+                    relevance_score=article.get('rerank_score') or article.get('relevance_score')
                 ))
         
         processing_time = time.time() - start_time
@@ -231,16 +246,25 @@ def prepare_context_from_articles(
     max_chars = max_tokens * 4  # Rough estimate
     
     for i, article in enumerate(articles, 1):
+        # Extract metadata properly
+        metadata = article.get('metadata', {})
+        title = article.get('title') or metadata.get('title', 'N/A')
+        date = article.get('date') or metadata.get('date', 'N/A')
+        source = article.get('source') or metadata.get('source', 'N/A')
+        
+        # Get document/content
+        content = article.get('document') or article.get('content') or article.get('text', '')
+        
         # Prepare article summary
         article_text = f"""
 Article {i}:
-Title: {article.get('title', 'N/A')}
-Date: {article.get('date', 'N/A')}
-Source: {article.get('source', 'N/A')}
+Title: {title}
+Date: {date}
+Source: {source}
 Parties: {', '.join(article.get('parties', [])) if article.get('parties') else 'N/A'}
 People: {', '.join(article.get('people', [])) if article.get('people') else 'N/A'}
 
-Content: {article.get('content', article.get('text', ''))[:1000]}...
+Content: {content[:1000]}...
 
 ---
 """
@@ -297,16 +321,24 @@ async def generate_answer(
     
     system_prompt = """You are an expert political analyst specializing in Bangladesh politics.
 
-Your task is to answer questions based ONLY on the provided news articles. 
+Your task is to answer questions based on the provided news articles about ALL political parties and figures in Bangladesh.
 
 Guidelines:
-1. Base your answer ONLY on the provided articles - do not use external knowledge
+1. PRIMARY: Base your answer on the provided articles whenever possible
 2. Cite specific articles when making claims (e.g., "According to Daily Star on Oct 15...")
-3. If information is not in the articles, clearly state "The provided articles do not contain information about..."
-4. Be objective and balanced - present multiple perspectives if they exist
-5. For comparison questions, clearly structure similarities and differences
-6. For trend questions, show chronological progression
-7. Keep answers concise but comprehensive (2-3 paragraphs for simple queries, more for complex ones)
+3. IMPORTANT: If the specific question is not directly answered in the articles:
+   - Provide general context based on what IS in the articles
+   - Use your knowledge of Bangladesh politics to give a helpful answer
+   - Clearly indicate: "While the specific details aren't in these articles, based on the political context..."
+4. For general questions (e.g., "security risks", "political reforms"):
+   - Extract relevant themes and patterns from available articles
+   - Synthesize information to answer the broader question
+   - Don't just say "articles don't contain this" - be helpful!
+5. Be objective and balanced - present ALL parties' perspectives equally
+6. For comparison questions, structure similarities and differences clearly
+7. For trend questions, show chronological progression
+8. Keep answers concise but comprehensive (2-3 paragraphs for simple queries, more for complex ones)
+9. If NO relevant articles are provided, acknowledge this and provide a brief general overview using your knowledge
 """
 
     user_prompt = f"""Question: {query}

@@ -259,6 +259,18 @@ class OptimizedRetriever:
                 filter_language=filters.get('language')
             )
             
+            # Fallback: If no results with filters, try without filters
+            if len(results) == 0 and (filters.get('themes') or filters.get('parties') or filters.get('people')):
+                logger.warning(f"No results with filters. Trying without filters...")
+                results = self.vector_db.retrieve_similar_articles(
+                    query=query,
+                    top_k=n_results,
+                    filter_date_from=filters.get('start_date'),
+                    filter_date_to=filters.get('end_date'),
+                    filter_language=filters.get('language')
+                )
+                logger.info(f"Fallback retrieval returned {len(results)} articles")
+            
             return results
             
         except Exception as e:
