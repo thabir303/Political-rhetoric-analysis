@@ -1,16 +1,17 @@
 """
 LLM Analysis Routes - Separate from Scraping
 """
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Depends
 from typing import List, Optional
 import time
 import logging
 
 from pydantic import BaseModel
+from backend.auth import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/analysis", tags=["LLM Analysis"])
+router = APIRouter(prefix="/analysis", tags=["LLM Analysis"], dependencies=[Depends(require_auth)])
 
 
 # Request/Response Models

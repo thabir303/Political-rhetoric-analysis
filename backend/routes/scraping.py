@@ -1,17 +1,18 @@
 """
 Scraping Routes - Separate from LLM Analysis
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Optional
 import time
 import logging
 from datetime import datetime
 
 from backend.models.schemas import ScrapingRequest, ScrapingResponse
+from backend.auth import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/scraping", tags=["Scraping"])
+router = APIRouter(prefix="/scraping", tags=["Scraping"], dependencies=[Depends(require_auth)])
 
 
 @router.post(

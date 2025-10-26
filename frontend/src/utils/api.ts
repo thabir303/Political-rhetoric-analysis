@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios'
 import type { SearchRequest, SearchResponse, PartiesListResponse, FigureProfileResponse } from '../types'
+import { getAuthHeader } from './auth'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
 
@@ -11,6 +12,30 @@ const apiClient = axios.create({
   },
   timeout: 0, // No timeout - scraping can take a while
 })
+
+// Add auth interceptor to include token in all requests
+apiClient.interceptors.request.use(
+  (config) => {
+    const authHeaders = getAuthHeader()
+    if (authHeaders.Authorization) {
+      config.headers.Authorization = authHeaders.Authorization
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// Add response interceptor to handle 401 errors
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Redirect to login page
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
 
 // Export apiClient for direct use (e.g., in test pages)
 export { apiClient }

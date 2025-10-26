@@ -24,9 +24,15 @@ webdriver-manager>=4.0.0
 python-dotenv>=1.0.0
 python-multipart>=0.0.9
 
+# Authentication
+PyJWT>=2.8.0
+passlib>=1.7.4
+bcrypt>=4.1.0
+
 # LLM and AI
 groq>=0.4.0
 google-generativeai>=0.8.0
+openai>=1.0.0
 
 # Date handling
 python-dateutil>=2.8.0

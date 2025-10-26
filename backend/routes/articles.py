@@ -1,7 +1,7 @@
 """
 Article Management Routes
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Optional
 import time
 import logging
@@ -15,10 +15,11 @@ from backend.models.schemas import (
     BulkArticleResponse,
 )
 from backend.database.vector_store import vector_store
+from backend.auth import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/articles", tags=["Articles"])
+router = APIRouter(prefix="/articles", tags=["Articles"], dependencies=[Depends(require_auth)])
 
 
 @router.post(

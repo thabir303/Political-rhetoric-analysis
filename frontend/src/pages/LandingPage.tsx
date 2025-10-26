@@ -1,8 +1,15 @@
 import { useNavigate } from 'react-router-dom';
-import { Newspaper, Users, Search, Database, MessageSquare, FileSearch } from 'lucide-react';
+import { Newspaper, Users, Search, Database, MessageSquare, FileSearch, LogOut } from 'lucide-react';
+import { logout, getEmail } from '../utils/auth';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const email = getEmail();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const features = [
     {
@@ -47,13 +54,29 @@ const LandingPage = () => {
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Speech Analysis System
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Analyzing Bangladesh Political News & Speeches
-            </p>
+          <div className="flex items-center justify-between">
+            <div className="text-center flex-1">
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                Speech Analysis System
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Analyzing Bangladesh Political News & Speeches
+              </p>
+            </div>
+            
+            {/* Logout Button */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600 font-medium">
+                {email}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200 font-medium"
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>

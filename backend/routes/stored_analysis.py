@@ -2,13 +2,14 @@
 Backend API endpoint for analyzing stored articles of a specific party or figure using LLM.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import logging
 from datetime import datetime
+from backend.auth import require_auth
 
-router = APIRouter(prefix="/analysis", tags=["analysis"])
+router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(require_auth)])
 logger = logging.getLogger(__name__)
 
 

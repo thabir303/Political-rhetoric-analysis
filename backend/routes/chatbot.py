@@ -17,19 +17,20 @@ import logging
 import time
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 
 from backend.core.vector_db import VectorDatabase
 from backend.core.query_classifier import LLMQueryClassifier
 from backend.core.optimized_retrieval import OptimizedRetriever
 from backend.core.llm_generation import LLMGenerator
+from backend.auth import require_auth
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/chatbot", tags=["Chatbot"])
+router = APIRouter(prefix="/chatbot", tags=["Chatbot"], dependencies=[Depends(require_auth)])
 
 # Initialize components (will be set in main.py or startup)
 vector_db: Optional[VectorDatabase] = None

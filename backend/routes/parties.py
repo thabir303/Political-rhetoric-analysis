@@ -1,16 +1,17 @@
 """
 Political Parties Endpoint - Uses strict POLITICAL_ENTITIES mapping
 """
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Depends
 from typing import List, Dict, Any, Optional
 import logging
 
 from backend.models.schemas import PartiesListResponse, PartyResponse, FigureProfileResponse, ArticleSummary
 from backend.core.scraping import POLITICAL_ENTITIES
+from backend.auth import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/parties", tags=["Political Parties"])
+router = APIRouter(prefix="/parties", tags=["Political Parties"], dependencies=[Depends(require_auth)])
 
 
 @router.get(

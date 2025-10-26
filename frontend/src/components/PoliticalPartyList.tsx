@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { fetchPoliticalParties } from '../utils/api'
 import { AnalysisButton } from './AnalysisButton'
+import { LogOut } from 'lucide-react'
+import { logout, getEmail } from '../utils/auth'
 import type { PoliticalParty } from '../types'
 
 /**
@@ -12,10 +14,16 @@ import type { PoliticalParty } from '../types'
  */
 export default function PoliticalPartyList() {
   const navigate = useNavigate()
+  const email = getEmail()
   const [parties, setParties] = useState<PoliticalParty[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedParty, setExpandedParty] = useState<string | null>(null)
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
 
   useEffect(() => {
     loadParties()
@@ -131,12 +139,24 @@ export default function PoliticalPartyList() {
             </Link>
             <span className="text-gray-500 text-sm">Political Parties</span>
           </div>
-          <Link
-            to="/scraper"
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
-          >
-            Scrape Newspapers
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              to="/scraper"
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+            >
+              Scrape Newspapers
+            </Link>
+            <span className="text-sm text-gray-600 font-medium">
+              {email}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200 font-medium"
+            >
+              <LogOut size={18} />
+              Logout
+            </button>
+          </div>
         </div>
       </nav>
 

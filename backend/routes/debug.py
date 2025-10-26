@@ -2,12 +2,13 @@
 Add this route to your backend to view all stored articles
 """
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from typing import Optional
 from backend.core.vector_db import VectorDatabase
+from backend.auth import require_auth
 import json
 
-router = APIRouter(prefix="/debug", tags=["Debug"])
+router = APIRouter(prefix="/debug", tags=["Debug"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/articles")

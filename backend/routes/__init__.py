@@ -2,6 +2,7 @@
 Routes initialization - Organized route modules
 """
 from fastapi import APIRouter
+from .auth import router as auth_router
 from .general import router as general_router
 from .articles import router as articles_router
 from .parties import router as parties_router
@@ -16,6 +17,8 @@ from .chatbot import router as chatbot_router
 router = APIRouter()
 
 # Include all sub-routers
+# Auth routes are public (login, verify)
+router.include_router(auth_router, tags=["Authentication"])
 router.include_router(general_router, tags=["General"])
 router.include_router(articles_router, tags=["Articles"])
 router.include_router(parties_router, tags=["Political Parties"])

@@ -2,16 +2,17 @@
 Figure Profile Routes - Direct access to political figure pages
 Mounted without /parties prefix to match frontend expectations
 """
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Depends
 from typing import Optional
 import logging
 
 from backend.models.schemas import FigureProfileResponse, ArticleSummary
 from backend.core.scraping import POLITICAL_ENTITIES
+from backend.auth import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["Figure Profiles"])
+router = APIRouter(tags=["Figure Profiles"], dependencies=[Depends(require_auth)])
 
 
 @router.post(

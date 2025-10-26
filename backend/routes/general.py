@@ -1,11 +1,12 @@
 """
 General Routes - Health, Stats, etc.
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 import logging
 
 from backend.models.schemas import HealthResponse
 from backend.config.settings import settings
+from backend.auth import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ async def health_check():
         )
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_auth)])
 async def get_statistics():
     """
     Get database statistics.
@@ -64,7 +65,7 @@ async def get_statistics():
         )
 
 
-@router.get("/")
+@router.get("/", dependencies=[Depends(require_auth)])
 async def root():
     """Root endpoint with API information."""
     return {

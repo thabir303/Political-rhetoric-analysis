@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: rag-ir-api
+    env: docker
+    region: singapore  # Choose closest region
+    plan: starter  # Free tier or starter ($7/month)
+    branch: main
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: ADMIN_EMAIL
+        sync: false  # Set manually in Render dashboard
+      - key: ADMIN_PASSWORD
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true  # Auto-generate secure secret
+      - key: GROQ_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: GOOGLE_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: ENVIRONMENT
+        value: production
+      - key: CHROMA_PERSIST_DIRECTORY
+        value: /opt/render/project/src/chroma_db
+      - key: ALLOWED_ORIGINS
+        value: https://your-frontend-domain.com  # Update with actual frontend URL
+    disk:
+      name: chroma-db-disk
+      mountPath: /opt/render/project/src/chroma_db
+      sizeGB: 1  # 1GB persistent disk ($1/month) - enough for 50K articles

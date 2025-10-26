@@ -1,7 +1,18 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { triggerScraping, type ScrapingResponse } from '../utils/api'
+import { LogOut } from 'lucide-react'
+import { logout, getEmail } from '../utils/auth'
 
 export default function NewspaperScraper() {
+  const navigate = useNavigate()
+  const email = getEmail()
+  
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+  
   // Calculate default date range: last 30 days
   const today = new Date()
   const thirtyDaysAgo = new Date(today)
@@ -79,13 +90,27 @@ export default function NewspaperScraper() {
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="bg-white rounded-lg shadow-lg p-6">
         {/* Header */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            📰 Newspaper Scraper
-          </h2>
-          <p className="text-gray-600">
-            Scrape political articles from Bangladeshi newspapers
-          </p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              📰 Newspaper Scraper
+            </h2>
+            <p className="text-gray-600">
+              Scrape political articles from Bangladeshi newspapers
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 font-medium">
+              {email}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200 font-medium"
+            >
+              <LogOut size={18} />
+              Logout
+            </button>
+          </div>
         </div>
 
         {/* Date Range Selection */}
