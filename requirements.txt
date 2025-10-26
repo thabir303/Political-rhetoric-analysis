@@ -7,18 +7,14 @@ pydantic-settings>=2.2.0
 # Vector Database
 chromadb>=0.4.22
 
-# Embeddings and ML
+# Embeddings and ML (Optimized - torch removed, sentence-transformers will install minimal torch)
 sentence-transformers>=2.5.0
-torch>=2.0.0
 numpy>=1.24.0
 scikit-learn>=1.3.0
 
-# HTTP and Scraping
-httpx>=0.27.0
+# HTTP and Scraping (Removed: httpx, selenium, webdriver-manager - not used)
 beautifulsoup4>=4.12.0
 requests>=2.31.0
-selenium>=4.15.0
-webdriver-manager>=4.0.0
 
 # Utilities
 python-dotenv>=1.0.0
@@ -30,9 +26,9 @@ passlib>=1.7.4
 bcrypt>=4.1.0
 
 # LLM and AI
+openai>=1.0.0
 groq>=0.4.0
 google-generativeai>=0.8.0
-openai>=1.0.0
 
 # Date handling
 python-dateutil>=2.8.0
