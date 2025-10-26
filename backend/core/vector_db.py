@@ -158,13 +158,54 @@ class VectorDatabase:
         
         logger.info(f"Storing {len(articles)} articles...")
         
+        # Check for existing URLs to prevent duplicates
+        existing_urls = set()
+        try:
+            all_existing = self.collection.get()
+            for metadata in all_existing.get('metadatas', []):
+                url = metadata.get('url')
+                if url:
+                    existing_urls.add(url)
+            logger.info(f"Found {len(existing_urls)} existing URLs in database")
+        except Exception as e:
+            logger.warning(f"Could not check existing URLs: {e}")
+        
+        # Filter out duplicates
+        unique_articles = []
+        duplicate_count = 0
+        
+        for article in articles:
+            url = article.get('url', '')
+            if url and url in existing_urls:
+                duplicate_count += 1
+                logger.debug(f"Skipping duplicate URL: {url}")
+            else:
+                unique_articles.append(article)
+                if url:
+                    existing_urls.add(url)  # Track for this batch too
+        
+        if duplicate_count > 0:
+            logger.info(f"Filtered out {duplicate_count} duplicate articles")
+        
+        if not unique_articles:
+            logger.warning("All articles were duplicates, nothing to store")
+            return {
+                'success': True, 
+                'message': 'All articles were duplicates',
+                'total': len(articles),
+                'stored': 0,
+                'duplicates': duplicate_count
+            }
+        
+        logger.info(f"Storing {len(unique_articles)} unique articles...")
+        
         # Prepare data
         ids = []
         documents = []
         metadatas = []
         article_embeddings = []
         
-        for i, article in enumerate(articles):
+        for i, article in enumerate(unique_articles):
             # Generate ID if not provided
             article_id = article.get('id', f"article_{datetime.now().timestamp()}_{i}")
             ids.append(article_id)
@@ -189,15 +230,15 @@ class VectorDatabase:
         total_stored = 0
         errors = []
         
-        for i in range(0, len(articles), batch_size):
-            batch_end = min(i + batch_size, len(articles))
+        for i in range(0, len(unique_articles), batch_size):
+            batch_end = min(i + batch_size, len(unique_articles))
             
             try:
                 batch_ids = ids[i:batch_end]
                 batch_docs = documents[i:batch_end]
                 batch_meta = metadatas[i:batch_end]
                 
-                if embeddings or any('embedding' in a for a in articles):
+                if embeddings or any('embedding' in a for a in unique_articles):
                     batch_emb = article_embeddings[i:batch_end]
                     self.collection.add(
                         ids=batch_ids,
@@ -224,12 +265,14 @@ class VectorDatabase:
         result = {
             'success': total_stored > 0,
             'total_articles': len(articles),
+            'unique_articles': len(unique_articles),
+            'duplicates': duplicate_count,
             'stored': total_stored,
             'errors': errors,
             'collection_size': self.collection.count()
         }
         
-        logger.info(f"Storage complete: {total_stored}/{len(articles)} articles stored")
+        logger.info(f"Storage complete: {total_stored}/{len(articles)} articles stored ({duplicate_count} duplicates filtered)")
         
         return result
     

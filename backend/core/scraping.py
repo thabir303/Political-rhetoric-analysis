@@ -219,7 +219,15 @@ class NewspaperScraper:
         self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
         self.end_date = datetime.strptime(end_date, "%Y-%m-%d")
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8',
+            'Referer': 'https://www.prothomalo.com/',
+            'Origin': 'https://www.prothomalo.com',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
         }
         self.session = requests.Session()
         self.session.headers.update(self.headers)
@@ -330,65 +338,198 @@ class NewspaperScraper:
 
 
 class ProthomAloScraper(NewspaperScraper):
-    """Scraper for Prothom Alo (Bangla) - Politics and Opinion only."""
+    """Scraper for Prothom Alo (Bangla) - Politics section only using search API with threading and pagination."""
     
     BASE_URL = "https://www.prothomalo.com"
-    API_URL = "https://www.prothomalo.com/api/v1"
+    API_SEARCH_URL = "https://www.prothomalo.com/api/v1/search"
+    SECTION_ID = 22237  # Politics section ID (integer, not string)
+    PAGE_SIZE = 100  # Articles per API request
+    
+    def __init__(self, start_date: str = "2024-08-05", end_date: str = "2025-10-26"):
+        """Initialize scraper with thread safety."""
+        super().__init__(start_date, end_date)
+        self._lock = threading.Lock()  # Thread-safe operations
+        self._seen_urls = set()  # Track URLs to prevent duplicates
     
     def scrape_articles(self) -> List[Dict]:
         """
-        Scrape articles from Prothom Alo using their API.
+        Scrape articles from Prothom Alo using search API with date parameters.
+        Uses parallel processing for faster scraping.
         
         Returns:
             List of article dictionaries
         """
-        logger.info("Starting Prothom Alo scraping...")
+        logger.info("Starting Prothom Alo scraping (Politics section - PARALLEL MODE)...")
+        logger.info(f"Date range: {self.start_date.strftime('%Y-%m-%d')} to {self.end_date.strftime('%Y-%m-%d')}")
+        
+        all_articles = []
+        
+        # Split date range into monthly chunks for parallel processing
+        date_chunks = self.split_date_range_by_month()
+        logger.info(f"Total date chunks to scrape: {len(date_chunks)}")
+        
+        # Reduced parallelism to avoid rate limiting (was 5, now 2)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            # Submit all date chunk scraping tasks
+            future_to_chunk = {
+                executor.submit(self.scrape_articles_for_date_range, start, end): (start, end) 
+                for start, end in date_chunks
+            }
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_chunk):
+                start, end = future_to_chunk[future]
+                try:
+                    articles = future.result()
+                    with self._lock:  # Thread-safe list update
+                        all_articles.extend(articles)
+                    logger.info(f"✓ Completed {start} to {end}: {len(articles)} articles")
+                except Exception as e:
+                    logger.error(f"✗ Error scraping {start} to {end}: {e}")
+                
+                # Add delay between chunks to avoid rate limiting
+                time.sleep(1)
+        
+        logger.info(f"Prothom Alo: Scraped {len(all_articles)} total articles (PARALLEL)")
+        logger.info(f"Unique URLs tracked: {len(self._seen_urls)}")
+        if len(self._seen_urls) > len(all_articles):
+            logger.info(f"Duplicates prevented: {len(self._seen_urls) - len(all_articles)}")
+        return all_articles
+    
+    def split_date_range_by_month(self) -> List[tuple]:
+        """
+        Split the date range into monthly chunks for parallel processing.
+        
+        Returns:
+            List of tuples (start_date, end_date) for each chunk
+        """
+        chunks = []
+        current_start = self.start_date
+        
+        while current_start <= self.end_date:
+            # Calculate end of current month or end_date, whichever is earlier
+            if current_start.month == 12:
+                next_month = current_start.replace(year=current_start.year + 1, month=1, day=1)
+            else:
+                next_month = current_start.replace(month=current_start.month + 1, day=1)
+            
+            current_end = min(next_month - timedelta(days=1), self.end_date)
+            
+            chunks.append((
+                current_start.strftime('%Y-%m-%d'),
+                current_end.strftime('%Y-%m-%d')
+            ))
+            
+            current_start = next_month
+        
+        return chunks
+    
+    def scrape_articles_for_date_range(self, start_date: str, end_date: str) -> List[Dict]:
+        """
+        Scrape articles for a specific date range using API with pagination.
+        
+        Args:
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            
+        Returns:
+            List of article dictionaries
+        """
+        # Small delay to avoid rate limiting when parallel threads start
+        time.sleep(0.5)
+        
         articles = []
         
-        # Use the API endpoint for stories
-        # The API returns JSON with article data
-        api_endpoints = [
-            f"{self.API_URL}/collections/politics",
-            f"{self.API_URL}/stories?section=politics&limit=100",
-        ]
+        # Convert dates to timestamps (milliseconds)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        end_dt = end_dt.replace(hour=23, minute=59, second=59)
         
-        for api_url in api_endpoints:
-            logger.info(f"Fetching from API: {api_url}")
+        published_after = int(start_dt.timestamp() * 1000)
+        published_before = int(end_dt.timestamp() * 1000)
+        
+        # Pagination: Start with offset 0
+        offset = 0
+        total_fetched = 0
+        
+        while True:
+            # Build API request params
+            params = {
+                'published-after': published_after,
+                'published-before': published_before,
+                'section-id': self.SECTION_ID,
+                'limit': self.PAGE_SIZE,
+                'offset': offset
+            }
             
-            response = self.make_request(api_url)
-            if not response:
-                continue
+            logger.info(f"  API Request: offset={offset}, limit={self.PAGE_SIZE}")
             
             try:
-                data = response.json()
+                response = self.session.get(self.API_SEARCH_URL, params=params, timeout=15)
+                response.raise_for_status()
                 
-                # Handle different response structures
-                stories = []
-                if 'stories' in data:
-                    stories = data['stories']
-                elif 'items' in data:
-                    # Collection endpoint returns items
-                    items = data.get('items', [])
-                    for item in items:
-                        if item.get('type') == 'story':
-                            stories.append(item.get('story', {}))
+                # Check if response has content
+                if not response.text or response.text.strip() == '':
+                    logger.error(f"  Empty response from API for {start_date} to {end_date}")
+                    break
                 
-                logger.info(f"Found {len(stories)} stories from API")
+                # Log response for debugging
+                logger.debug(f"  Response length: {len(response.text)} chars")
                 
-                for story_data in stories:  # Process all articles from API
-                    article_data = self.parse_story_from_api(story_data)
+                try:
+                    data = response.json()
+                except ValueError as json_err:
+                    logger.error(f"  JSON parse error: {json_err}")
+                    logger.error(f"  Response text (first 200 chars): {response.text[:200]}")
+                    break
+                
+                # Extract results
+                results = data.get('results', {})
+                stories = results.get('stories', [])
+                total_available = results.get('total', 0)
+                
+                if not stories:
+                    logger.info(f"  No more articles found (offset={offset})")
+                    break
+                
+                logger.info(f"  Fetched {len(stories)} articles (Total available: {total_available})")
+                
+                # Process stories with parallel threading
+                with ThreadPoolExecutor(max_workers=3) as executor:
+                    future_to_story = {
+                        executor.submit(self.parse_story_from_api, story_data): story_data
+                        for story_data in stories
+                    }
                     
-                    if article_data:
-                        articles.append(article_data)
-                        logger.info(f"Parsed: {article_data['title'][:50]}...")
-                    
-                    time.sleep(0.2)  # Be respectful
-                    
+                    for future in as_completed(future_to_story):
+                        try:
+                            article_data = future.result()
+                            if article_data:
+                                # Check for duplicate URL (thread-safe)
+                                with self._lock:
+                                    if article_data['url'] not in self._seen_urls:
+                                        self._seen_urls.add(article_data['url'])
+                                        articles.append(article_data)
+                                    else:
+                                        logger.debug(f"    Skipping duplicate: {article_data['url']}")
+                        except Exception as e:
+                            logger.error(f"    Error parsing story: {e}")
+                
+                total_fetched += len(stories)
+                
+                # Check if we've fetched all articles
+                if total_fetched >= total_available or len(stories) < self.PAGE_SIZE:
+                    logger.info(f"  Completed: fetched {total_fetched}/{total_available} articles")
+                    break
+                
+                # Move to next page
+                offset += self.PAGE_SIZE
+                time.sleep(0.5)  # Be respectful to API
+                
             except Exception as e:
-                logger.error(f"Error parsing API response from {api_url}: {e}")
-                continue
+                logger.error(f"  API Error for {start_date} to {end_date} at offset {offset}: {e}")
+                break
         
-        logger.info(f"Prothom Alo: Scraped {len(articles)} articles")
         return articles
     
     def parse_story_from_api(self, story_data: Dict) -> Optional[Dict]:
@@ -403,18 +544,33 @@ class ProthomAloScraper(NewspaperScraper):
         """
         try:
             # Extract basic info
-            title = story_data.get('headline', '')
-            if not title:
+            headline = story_data.get('headline', '')
+            if not headline:
                 return None
             
             # Get URL
-            url = story_data.get('url', '')
-            if not url:
-                slug = story_data.get('slug', '')
-                if slug:
-                    url = f"{self.BASE_URL}/{slug}"
-                else:
-                    return None
+            slug = story_data.get('slug', '')
+            if not slug:
+                return None
+            
+            # Construct full URL
+            url = f"{self.BASE_URL}/{slug}"
+            
+            # Filter: Only politics section articles
+            # Check sections in story data
+            sections = story_data.get('sections', [])
+            is_politics = False
+            for section in sections:
+                section_name = section.get('name', '').lower()
+                section_slug = section.get('slug', '').lower()
+                if 'politics' in section_name or 'রাজনীতি' in section_name or 'politics' in section_slug:
+                    is_politics = True
+                    break
+            
+            # Also check if URL contains /politics/
+            if not is_politics and '/politics/' not in slug:
+                logger.debug(f"Skipping non-politics article: {url}")
+                return None
             
             # Parse date
             published_at = story_data.get('published-at') or story_data.get('first-published-at')
@@ -426,29 +582,28 @@ class ProthomAloScraper(NewspaperScraper):
             
             # Check date range
             if not self.is_within_date_range(article_date):
-                logger.debug(f"Article date {article_date} outside range")
                 return None
             
-            # Get content - fetch the full article
-            logger.info(f"Fetching full content for: {title[:50]}...")
-            content = self.fetch_article_content(url)
+            # Get content summary/excerpt from API
+            summary = story_data.get('summary', '') or story_data.get('subheadline', '')
+            
+            # Fetch full article content
+            full_content = self.fetch_article_content(url)
+            
+            # Use full content if available, otherwise use summary
+            content = full_content if full_content and len(full_content) > 100 else summary
             
             if not content or len(content) < 100:
-                # Try to use excerpt as fallback
-                metadata = story_data.get('metadata', {})
-                excerpt = metadata.get('excerpt', '') or story_data.get('subheadline', '')
-                if len(excerpt) > 100:
-                    content = excerpt
-                else:
-                    logger.warning(f"Insufficient content for {url}")
-                    return None
+                logger.debug(f"Insufficient content for {url}")
+                return None
             
             # Check for political mentions (for categorization)
-            combined_text = f"{title} {content}"
+            combined_text = f"{headline} {content}"
             political_entities = self.detect_political_entities(combined_text)
             mentions = list(political_entities.keys()) if political_entities else []
             
-            # For politics section, accept all articles even without specific entity mentions
+            # Since we're already filtering by politics section, accept all articles
+            # even if they don't mention specific entities
             if not mentions:
                 mentions = ["General Politics"]
                 political_entities = {}  # Empty dict for general politics
@@ -458,12 +613,19 @@ class ProthomAloScraper(NewspaperScraper):
             for party_data in political_entities.values():
                 all_figures.extend(party_data.get("figures", []))
             
-            # Extract category
-            sections = story_data.get('sections', [])
-            category = sections[0].get('display-name', 'general') if sections else 'general'
+            # Extract author
+            author = story_data.get('author-name', '')
+            
+            # Extract category (ensure it's politics)
+            category = 'politics'
+            if sections:
+                for section in sections:
+                    if 'politics' in section.get('name', '').lower() or 'রাজনীতি' in section.get('name', ''):
+                        category = section.get('name', 'politics')
+                        break
             
             return {
-                'title': title,
+                'title': headline,
                 'date': article_date.strftime('%Y-%m-%d'),
                 'content': content,
                 'url': url,
@@ -473,7 +635,8 @@ class ProthomAloScraper(NewspaperScraper):
                 'primary_parties': mentions,  # Same as mentions, for clarity
                 'source': 'Prothom Alo',
                 'language': 'Bangla',
-                'category': category
+                'category': category,
+                'author': author if author else None
             }
             
         except Exception as e:
@@ -490,28 +653,47 @@ class ProthomAloScraper(NewspaperScraper):
         Returns:
             Article content as string
         """
-        response = self.make_request(url)
-        if not response:
-            return ""
-        
         try:
+            response = self.make_request(url)
+            if not response:
+                return ""
+            
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Try to find content in common locations
+            # Try multiple content selectors
             content_parts = []
+            content_selectors = [
+                '.story-content',
+                '.article-content',
+                '.content',
+                'article p',
+                '.story-element-text'
+            ]
             
-            # Look for paragraphs
-            paragraphs = soup.find_all('p')
-            for p in paragraphs:
-                text = p.get_text(strip=True)
-                if len(text) > 20:  # Skip very short paragraphs
-                    content_parts.append(text)
+            for selector in content_selectors:
+                content_elems = soup.select(selector)
+                if content_elems:
+                    for elem in content_elems:
+                        text = elem.get_text(strip=True)
+                        if len(text) > 20:
+                            content_parts.append(text)
+                    if content_parts:
+                        break
             
-            return ' '.join(content_parts)  # No limit on paragraphs
+            # Fallback: get all paragraphs
+            if not content_parts:
+                paragraphs = soup.find_all('p')
+                for p in paragraphs:
+                    text = p.get_text(strip=True)
+                    if len(text) > 20:
+                        content_parts.append(text)
+            
+            return '\n\n'.join(content_parts)
             
         except Exception as e:
-            logger.error(f"Error fetching article content from {url}: {e}")
+            logger.debug(f"Error fetching article content from {url}: {e}")
             return ""
+
 
 
 class JugantorScraper(NewspaperScraper):
