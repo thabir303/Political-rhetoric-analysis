@@ -4,6 +4,7 @@ import { fetchFigureProfile, getPeriodSummaries } from '../utils/api'
 import type { FigureProfileResponse } from '../types'
 import { AnalysisButton } from './AnalysisButton'
 import { formatDateToDDMMYYYY } from '../utils/dateFormat'
+import { getAuthHeader } from '../utils/auth'
 
 export default function FigureProfile() {
   const { partyName, figureName } = useParams<{ partyName: string; figureName: string }>()
@@ -120,7 +121,10 @@ export default function FigureProfile() {
         setLoadingFullArticle(articleId)
         try {
           const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
-          const response = await fetch(`${API_BASE_URL}/article/${articleId}/full`)
+          const authHeaders = getAuthHeader()
+          const response = await fetch(`${API_BASE_URL}/article/${articleId}/full`, {
+            headers: authHeaders,
+          })
           if (response.ok) {
             const data = await response.json()
             const newFullArticles = new Map(fullArticles)
@@ -142,10 +146,12 @@ export default function FigureProfile() {
     
     try {
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+      const authHeaders = getAuthHeader()
       const response = await fetch(`${API_BASE_URL}/articles/${articleId}/summarize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
       })
 

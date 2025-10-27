@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
+import { getAuthHeader } from '../utils/auth';
 
 interface SearchResult {
   id: string;
@@ -35,10 +36,12 @@ const SearchPage = () => {
     
     try {
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+      const authHeaders = getAuthHeader()
       const response = await fetch(`${API_BASE_URL}/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
         body: JSON.stringify({
           query: query,
@@ -64,10 +67,12 @@ const SearchPage = () => {
     
     try {
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+      const authHeaders = getAuthHeader()
       const response = await fetch(`${API_BASE_URL}/articles/${articleId}/summarize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
       });
 
