@@ -73,10 +73,9 @@ def initialize_chatbot_components():
     global vector_db, classifier, retriever, answer_generator
     
     try:
-        # Initialize VectorDatabase
+        # Initialize VectorDatabase (uses settings.chroma_persist_directory)
         logger.info("Initializing VectorDatabase...")
         vector_db = VectorDatabase(
-            persist_directory="./chroma_db",
             collection_name="political_articles"
         )
         

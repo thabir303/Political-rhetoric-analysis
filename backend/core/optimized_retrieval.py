@@ -419,9 +419,8 @@ class OptimizedRetriever:
 async def test_retriever():
     """Test the optimized retriever with GPT-5-nano."""
     
-    # Initialize components
+    # Initialize components (uses settings.chroma_persist_directory)
     vector_db = VectorDatabase(
-        persist_directory="./chroma_db",
         collection_name="political_articles"
     )
     

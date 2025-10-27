@@ -37,7 +37,7 @@ class VectorDatabase:
     
     def __init__(
         self,
-        persist_directory: str = "./chroma_db",
+        persist_directory: Optional[str] = None,
         collection_name: str = "article_embeddings",
         embedding_model: str = "all-MiniLM-L6-v2"
     ):
@@ -45,10 +45,15 @@ class VectorDatabase:
         Initialize the vector database.
         
         Args:
-            persist_directory: Directory for persistent storage
+            persist_directory: Directory for persistent storage (None = use settings)
             collection_name: Name of the collection
             embedding_model: Name of the embedding model
         """
+        # Use settings if not provided
+        if persist_directory is None:
+            from backend.config import settings
+            persist_directory = settings.chroma_persist_directory
+        
         self.persist_directory = Path(persist_directory)
         self.collection_name = collection_name
         self.embedding_model_name = embedding_model
@@ -1151,14 +1156,14 @@ class VectorDatabase:
 
 # Convenience functions
 def initialize_database(
-    persist_directory: str = "./chroma_db",
+    persist_directory: Optional[str] = None,
     collection_name: str = "article_embeddings"
 ) -> VectorDatabase:
     """
     Initialize and return a VectorDatabase instance.
     
     Args:
-        persist_directory: Directory for storage
+        persist_directory: Directory for storage (None = use settings)
         collection_name: Collection name
     
     Returns:
