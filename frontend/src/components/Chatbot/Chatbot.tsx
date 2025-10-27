@@ -17,6 +17,7 @@ import {
   updateSessionInList,
   createSessionTitle,
 } from './utils/chatUtils';
+import { getAuthHeader } from '../../utils/auth';
 
 interface ChatbotProps {
   apiUrl?: string;
@@ -103,10 +104,12 @@ const Chatbot: React.FC<ChatbotProps> = ({
     setIsLoading(true);
 
     try {
+      const authHeaders = getAuthHeader();
       const response = await fetch(`${apiUrl}/chatbot/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
         body: JSON.stringify({
           query: input,
