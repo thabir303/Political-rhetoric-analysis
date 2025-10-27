@@ -190,7 +190,7 @@ async def chat(request: ChatRequest):
         # Step 5: Prepare Source Articles
         sources = []
         if request.include_sources:
-            for article in articles[:10]:  # Top 10 sources
+            for article in articles[:20]:  # Top 20 sources (increased from 10)
                 # Extract from metadata if not in top-level
                 metadata = article.get('metadata', {})
                 title = article.get('title') or metadata.get('title', 'N/A')

@@ -113,7 +113,7 @@ const Chatbot: React.FC<ChatbotProps> = ({
         },
         body: JSON.stringify({
           query: input,
-          top_k: 20,
+          top_k: 20,  // Increased from 10 to 20 to show more sources
           include_sources: true,
           language: null,
         }),
