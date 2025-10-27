@@ -25,11 +25,15 @@ async def health_check():
         stats = db.get_statistics()
         total_articles = stats.get("total_articles", 0)
         
+        # Get ChromaDB path
+        chromadb_path = settings.chroma_persist_directory
+        
         return HealthResponse(
             status="healthy",
             version=settings.app_version,
             database_connected=True,
-            total_articles=total_articles
+            total_articles=total_articles,
+            chromadb_path=chromadb_path
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -37,7 +41,8 @@ async def health_check():
             status="unhealthy",
             version=settings.app_version,
             database_connected=False,
-            total_articles=0
+            total_articles=0,
+            chromadb_path=settings.chroma_persist_directory
         )
 
 

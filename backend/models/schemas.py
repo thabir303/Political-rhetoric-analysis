@@ -78,6 +78,7 @@ class HealthResponse(BaseModel):
     version: str = Field(..., description="API version")
     database_connected: bool = Field(..., description="Database connection status")
     total_articles: int = Field(0, description="Total articles in database")
+    chromadb_path: Optional[str] = Field(None, description="ChromaDB storage path")
 
 
 class BulkArticleCreate(BaseModel):
