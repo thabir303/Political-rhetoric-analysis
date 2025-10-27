@@ -119,7 +119,8 @@ export default function FigureProfile() {
       if (!fullArticles.has(articleId)) {
         setLoadingFullArticle(articleId)
         try {
-          const response = await fetch(`http://localhost:8000/api/v1/article/${articleId}/full`)
+          const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+          const response = await fetch(`${API_BASE_URL}/article/${articleId}/full`)
           if (response.ok) {
             const data = await response.json()
             const newFullArticles = new Map(fullArticles)
@@ -140,7 +141,8 @@ export default function FigureProfile() {
     setSummarizingArticles(prev => new Set(prev).add(articleId))
     
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/articles/${articleId}/summarize`, {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+      const response = await fetch(`${API_BASE_URL}/articles/${articleId}/summarize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

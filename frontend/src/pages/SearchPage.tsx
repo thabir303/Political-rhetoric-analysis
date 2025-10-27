@@ -34,7 +34,8 @@ const SearchPage = () => {
     setError('');
     
     try {
-      const response = await fetch('http://localhost:8000/api/v1/query', {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+      const response = await fetch(`${API_BASE_URL}/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,7 +63,8 @@ const SearchPage = () => {
     setSummarizingId(articleId);
     
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/articles/${articleId}/summarize`, {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+      const response = await fetch(`${API_BASE_URL}/articles/${articleId}/summarize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
