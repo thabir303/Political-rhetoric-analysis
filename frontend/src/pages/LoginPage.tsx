@@ -31,7 +31,7 @@ export default function LoginPage() {
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         {/* Logo/Title */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">RAG-IR Admin</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Portal</h1>
           <p className="text-gray-600">Sign in to access the dashboard</p>
         </div>
 
