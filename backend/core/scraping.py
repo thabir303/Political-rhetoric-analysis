@@ -440,7 +440,6 @@ class ProthomAloScraper(NewspaperScraper):
         
         articles = []
         
-        # Convert dates to timestamps (milliseconds)
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         end_dt = end_dt.replace(hour=23, minute=59, second=59)
