@@ -99,18 +99,6 @@ export default function NewspaperScraper() {
               Scrape political articles from Bangladeshi newspapers
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 font-medium">
-              {email}
-            </span>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200 font-medium"
-            >
-              <LogOut size={18} />
-              Logout
-            </button>
-          </div>
         </div>
 
         {/* Date Range Selection */}
