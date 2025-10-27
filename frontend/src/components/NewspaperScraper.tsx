@@ -1,17 +1,21 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { triggerScraping, type ScrapingResponse } from '../utils/api'
-import { LogOut } from 'lucide-react'
-import { logout, getEmail } from '../utils/auth'
+import { useState, useEffect, useRef } from 'react'
+import { apiClient, type ScrapingResponse } from '../utils/api'
+import { Loader2 } from 'lucide-react'
+
+interface JobStatus {
+  id: string
+  type: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  progress: number
+  current_step: string
+  result: ScrapingResponse | null
+  error: string | null
+  created_at: string
+  updated_at: string
+}
 
 export default function NewspaperScraper() {
-  const navigate = useNavigate()
-  const email = getEmail()
-  
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+  const pollIntervalRef = useRef<number | null>(null)
   
   // Calculate default date range: last 30 days
   const today = new Date()
@@ -33,6 +37,10 @@ export default function NewspaperScraper() {
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<ScrapingResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  
+  // Background job state
+  const [_jobId, setJobId] = useState<string | null>(null)
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
 
   const newspapers = [
     { id: 'ProthomAlo', name: 'Prothom Alo', lang: 'Bangla', color: 'bg-blue-100 text-blue-800' },
@@ -68,16 +76,67 @@ export default function NewspaperScraper() {
     setIsLoading(true)
     setError(null)
     setResult(null)
+    setJobStatus(null)
 
     try {
-      const response = await triggerScraping(startDate, endDate, selectedNewspapers)
-      setResult(response)
+      // Start background job
+      const response = await apiClient.post('/scraping/newspapers/start', {
+        start_date: startDate,
+        end_date: endDate,
+        newspapers: selectedNewspapers
+      })
+
+      const { job_id } = response.data
+      setJobId(job_id)
+      
+      // Start polling for job status
+      startPolling(job_id)
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scraping failed')
-    } finally {
+      setError(err instanceof Error ? err.message : 'Failed to start scraping')
       setIsLoading(false)
     }
   }
+
+  const startPolling = (jobId: string) => {
+    // Clear any existing interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+    }
+
+    // Poll every 2 seconds
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await apiClient.get(`/scraping/jobs/${jobId}`)
+        const job: JobStatus = response.data
+        
+        setJobStatus(job)
+        
+        if (job.status === 'completed') {
+          clearInterval(pollIntervalRef.current!)
+          setResult(job.result)
+          setIsLoading(false)
+          pollIntervalRef.current = null
+        } else if (job.status === 'failed') {
+          clearInterval(pollIntervalRef.current!)
+          setError(job.error || 'Scraping failed')
+          setIsLoading(false)
+          pollIntervalRef.current = null
+        }
+      } catch (err) {
+        console.error('Failed to poll job status:', err)
+      }
+    }, 2000)
+  }
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+      }
+    }
+  }, [])
 
   const formatTime = (seconds: number) => {
     if (seconds < 60) return `${seconds.toFixed(1)}s`
@@ -182,26 +241,7 @@ export default function NewspaperScraper() {
           >
             {isLoading ? (
               <span className="flex items-center justify-center cursor-pointer">
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
+                <Loader2 className="animate-spin mr-2 h-5 w-5" />
                 Scraping in progress...
               </span>
             ) : (
@@ -211,6 +251,41 @@ export default function NewspaperScraper() {
             )}
           </button>
         </div>
+
+        {/* Progress Display */}
+        {isLoading && jobStatus && (
+          <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-blue-900 flex items-center">
+                <Loader2 className="animate-spin mr-2 h-5 w-5" />
+                {jobStatus.current_step || 'Processing...'}
+              </h3>
+              <span className="text-sm font-medium text-blue-700">
+                {jobStatus.progress}%
+              </span>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="relative w-full bg-blue-200 rounded-full h-3 overflow-hidden mb-3">
+              <div
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${jobStatus.progress}%` }}
+              >
+                <div className="absolute inset-0 bg-white opacity-20 animate-pulse" />
+              </div>
+            </div>
+
+            {/* Status Info */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-blue-600">
+                Status: <span className="font-medium capitalize">{jobStatus.status}</span>
+              </span>
+              <span className="text-blue-500">
+                � You can close this page - job continues in background
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Error Display */}
         {error && (
