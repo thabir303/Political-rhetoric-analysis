@@ -27,7 +27,7 @@ export default function PartyProfile() {
   const [summarizingArticles, setSummarizingArticles] = useState<Set<string>>(new Set())
   
   // Period summary state (for newly generated summary from AnalysisButton)
-  const [periodSummary, setPeriodSummary] = useState<{
+  const [_periodSummary, setPeriodSummary] = useState<{
     summary: string
     key_points: string[]
     keywords: string[]
@@ -44,7 +44,7 @@ export default function PartyProfile() {
     date_range: { start: string, end: string }
     last_updated?: string
   }>>([])
-  const [loadingPeriodSummaries, setLoadingPeriodSummaries] = useState(false)
+  const [_loadingPeriodSummaries, setLoadingPeriodSummaries] = useState(false)
 
   const loadProfile = async (from?: string, to?: string) => {
     if (!partyName) {

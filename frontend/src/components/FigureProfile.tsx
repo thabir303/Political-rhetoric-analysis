@@ -28,7 +28,7 @@ export default function FigureProfile() {
   const [summarizingArticles, setSummarizingArticles] = useState<Set<string>>(new Set())
   
   // Period summary state (for newly generated summary from AnalysisButton)
-  const [periodSummary, setPeriodSummary] = useState<{
+  const [_periodSummary, setPeriodSummary] = useState<{
     summary: string
     key_points: string[]
     keywords: string[]
@@ -45,7 +45,7 @@ export default function FigureProfile() {
     date_range: { start: string, end: string }
     last_updated?: string
   }>>([])
-  const [loadingPeriodSummaries, setLoadingPeriodSummaries] = useState(false)
+  const [_loadingPeriodSummaries, setLoadingPeriodSummaries] = useState(false)
 
   // Load all period summaries for this figure
   const loadPeriodSummaries = async () => {

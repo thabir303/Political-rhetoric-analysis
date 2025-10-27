@@ -35,7 +35,7 @@ interface AnalysisResult {
   processing_time: number
 }
 
-export function AnalysisButton({ type, name, party, className = '', onAnalysisComplete }: AnalysisButtonProps) {
+export function AnalysisButton({ type, name, party: _party, className = '', onAnalysisComplete }: AnalysisButtonProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [showPrompt, setShowPrompt] = useState(false)

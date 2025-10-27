@@ -70,7 +70,7 @@ export default function NewspaperScraper() {
     setResult(null)
 
     try {
-      const response = await triggerScraping(startDate, endDate, selectedNewspapers, true) // Enable LLM analysis
+      const response = await triggerScraping(startDate, endDate, selectedNewspapers)
       setResult(response)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Scraping failed')
