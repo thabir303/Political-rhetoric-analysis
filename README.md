@@ -138,7 +138,11 @@ kill -9 $(sudo lsof -t -i:8000)
 ### Production mode
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+# For 2GB RAM server (like Render Standard)
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+
+# For 4GB+ RAM servers
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
 ```
 
 The API will be available at:

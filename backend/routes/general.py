@@ -20,6 +20,7 @@ async def health_check():
     """
     try:
         from backend.core.vector_db import VectorDatabase
+        from backend.utils.memory_manager import get_memory_usage
         
         db = VectorDatabase(collection_name="political_articles")
         stats = db.get_statistics()
@@ -27,6 +28,15 @@ async def health_check():
         
         # Get ChromaDB path
         chromadb_path = settings.chroma_persist_directory
+        
+        # Get memory usage
+        memory_info = get_memory_usage()
+        memory_mb = memory_info.get("rss_mb", 0)
+        memory_percent = memory_info.get("percent", 0)
+        
+        # Log if memory high
+        if memory_percent > 75:
+            logger.warning(f"High memory usage: {memory_percent:.1f}% ({memory_mb:.1f} MB)")
         
         return HealthResponse(
             status="healthy",

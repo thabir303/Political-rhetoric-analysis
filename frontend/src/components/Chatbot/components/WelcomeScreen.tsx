@@ -32,9 +32,6 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectExample }) => {
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 max-w-sm mx-auto leading-relaxed">
         I'm your AI assistant for Bangladesh political analysis. Ask me anything!
       </p>
-      <p className="text-xs text-gray-500 dark:text-gray-500 mb-6 italic">
-        Powered by advanced AI • Analyzing real news articles
-      </p>
       <div className="mt-8 space-y-3 max-w-md mx-auto">
         <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-3 uppercase tracking-wide flex items-center justify-center gap-2">
           <span className="w-1 h-1 bg-blue-500 rounded-full"></span>

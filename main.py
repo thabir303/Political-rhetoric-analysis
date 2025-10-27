@@ -86,10 +86,16 @@ async def root():
 
 
 if __name__ == "__main__":
+    # Force single worker for memory optimization (2GB RAM limit)
+    # Multiple workers multiply memory usage by worker count
+    import os
+    os.environ['WEB_CONCURRENCY'] = '1'
+    
     uvicorn.run(
         "main:app",
         host=settings.host,
         port=settings.port,
         reload=settings.environment == "development",
-        log_level="info"
+        log_level="info",
+        workers=1  # Explicitly set 1 worker for production
     )

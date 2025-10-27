@@ -50,7 +50,7 @@ export default function LoginPage() {
           {/* Email Input */}
           <div>
             <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-              Admin Email
+             Email address
             </label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -85,13 +85,13 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 focus:bg-white"
-                placeholder="Enter your password"
+                placeholder="Enter password"
                 disabled={loading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-blue-500 transition-colors"
+                className="absolute inset-y-0 right-0 cursor-pointer pr-3 flex items-center text-gray-400 hover:text-blue-500 transition-colors"
                 disabled={loading}
               >
                 {showPassword ? (
@@ -119,7 +119,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3.5 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
+            className="w-full bg-gradient-to-r from-blue-600 cursor-pointer to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3.5 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
           >
             {loading ? (
               <span className="flex items-center justify-center">
@@ -148,10 +148,6 @@ export default function LoginPage() {
             </svg>
             Secure Admin Authentication
           </p>
-          <div className="flex items-center justify-center gap-1 text-xs text-gray-400">
-            <span>Powered by</span>
-            <span className="font-semibold text-blue-600">RAG-IR</span>
-          </div>
         </div>
       </div>
     </div>

@@ -281,7 +281,7 @@ export default function NewspaperScraper() {
                 Status: <span className="font-medium capitalize">{jobStatus.status}</span>
               </span>
               <span className="text-blue-500">
-                � You can close this page - job continues in background
+                You can close this page - job continues in background
               </span>
             </div>
           </div>

@@ -368,8 +368,9 @@ class ProthomAloScraper(NewspaperScraper):
         date_chunks = self.split_date_range_by_month()
         logger.info(f"Total date chunks to scrape: {len(date_chunks)}")
         
-        # Reduced parallelism to avoid rate limiting (was 5, now 2)
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        # Use 1 worker for memory optimization (2GB RAM limit)
+        # Sequential processing is safer and uses less memory
+        with ThreadPoolExecutor(max_workers=1) as executor:
             # Submit all date chunk scraping tasks
             future_to_chunk = {
                 executor.submit(self.scrape_articles_for_date_range, start, end): (start, end) 
@@ -494,8 +495,8 @@ class ProthomAloScraper(NewspaperScraper):
                 
                 logger.info(f"  Fetched {len(stories)} articles (Total available: {total_available})")
                 
-                # Process stories with parallel threading
-                with ThreadPoolExecutor(max_workers=3) as executor:
+                # Process stories sequentially for memory optimization
+                with ThreadPoolExecutor(max_workers=1) as executor:
                     future_to_story = {
                         executor.submit(self.parse_story_from_api, story_data): story_data
                         for story_data in stories
@@ -729,8 +730,8 @@ class JugantorScraper(NewspaperScraper):
         
         logger.info(f"Total dates to scrape: {len(dates_to_scrape)}")
         
-        # Parallel processing of dates with ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        # Sequential processing for memory optimization (2GB RAM limit)
+        with ThreadPoolExecutor(max_workers=1) as executor:
             # Submit all date scraping tasks
             future_to_date = {
                 executor.submit(self.scrape_articles_for_date, date_str): date_str 
@@ -873,8 +874,8 @@ class JugantorScraper(NewspaperScraper):
         
         logger.info(f"  Total politics article URLs for {date}: {len(all_article_urls)}")
         
-        # Parallel processing of articles with ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        # Sequential processing for memory optimization (2GB RAM limit)
+        with ThreadPoolExecutor(max_workers=1) as executor:
             # Submit all article scraping tasks
             future_to_url = {
                 executor.submit(self.scrape_article, url, date): url 
