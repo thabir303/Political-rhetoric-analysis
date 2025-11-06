@@ -2,11 +2,11 @@
 Query Classification Module - LLM-Based
 
 Purely LLM-based approach for accurate query understanding.
-Uses gpt-4o-mini for intelligent query classification and intent extraction.
+Uses gpt-5-nano for intelligent query classification and intent extraction.
 
 Strategy:
 - LLM classification for all queries (no rule-based fallback)
-- gpt-4o-mini for fast and accurate intent detection
+- gpt-5-nano for fast and accurate intent detection
 - Handles any query type including complex research questions
 
 Author: RAG-IR System
@@ -30,18 +30,18 @@ class LLMQueryClassifier:
     """
     Pure LLM-based query classifier for accurate intent detection.
     
-    Uses gpt-4o-mini for intelligent query understanding.
+    Uses gpt-5-nano for intelligent query understanding.
     NO manual rules, NO keyword matching - 100% LLM-powered.
     """
     
-    def __init__(self, model: str = "gpt-4o-mini"):
+    def __init__(self, model: str = "gpt-5-nano"):
         """
         Initialize the pure LLM-based query classifier.
         
         Args:
-            model: LLM model to use (default: gpt-4o-mini)
+            model: LLM model to use (default: gpt-5-nano)
         """
-        # Create LLM generator with gpt-4o-mini
+        # Create LLM generator with gpt-5-nano
         self.llm = LLMGenerator(
             model=model,
             temperature=0.1,  # Low temperature for consistent classification
@@ -125,7 +125,7 @@ class LLMQueryClassifier:
     
     async def _classify_with_llm(self, query: str) -> Dict[str, Any]:
         """
-        LLM-based classification using gpt-4o-mini.
+        LLM-based classification using gpt-5-nano.
         
         Args:
             query: User query string (English or Bangla)
@@ -335,8 +335,8 @@ Important:
 async def test_classifier():
     """Test the LLM-based classifier with research questions."""
     
-    # Initialize classifier with gpt-4o-mini
-    classifier = LLMQueryClassifier(model="gpt-4o-mini")
+    # Initialize classifier with gpt-5-nano
+    classifier = LLMQueryClassifier(model="gpt-5-nano")
     
     # Test queries (including research questions)
     test_queries = [
@@ -360,7 +360,7 @@ async def test_classifier():
     ]
     
     print("=" * 80)
-    print("LLM QUERY CLASSIFIER TEST - GPT-4O-MINI")
+    print("LLM QUERY CLASSIFIER TEST - GPT-5-NANO")
     print("=" * 80)
     print(f"Model: {classifier.llm.model}")
     print(f"Provider: {classifier.llm.provider}")

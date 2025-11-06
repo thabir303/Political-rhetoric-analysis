@@ -2,7 +2,7 @@
 Chatbot API Routes
 
 Intelligent chatbot endpoint for answering research questions
-about Bangladesh politics using RAG with gpt-4o-mini.
+about Bangladesh politics using RAG with gpt-5-nano.
 
 Features:
 - LLM-based query classification
@@ -10,7 +10,6 @@ Features:
 - Context-aware answer generation
 - Support for complex research questions
 
-Author: RAG-IR System
 """
 
 import logging
@@ -65,7 +64,7 @@ class ChatResponse(BaseModel):
     sources: List[SourceArticle] = Field(default_factory=list, description="Source articles used")
     total_articles_retrieved: int = Field(0, description="Total articles retrieved")
     processing_time: float = Field(0.0, description="Total processing time in seconds")
-    model_used: str = Field("gpt-4o-mini", description="Model used for generation")
+    model_used: str = Field("gpt-5-nano", description="Model used for generation")
 
 
 def initialize_chatbot_components():
@@ -79,9 +78,9 @@ def initialize_chatbot_components():
             collection_name="political_articles"
         )
         
-        # Initialize Query Classifier with gpt-4o-mini
-        logger.info("Initializing LLMQueryClassifier with gpt-4o-mini...")
-        classifier = LLMQueryClassifier(model="gpt-4o-mini")
+        # Initialize Query Classifier with gpt-5-nano
+        logger.info("Initializing LLMQueryClassifier with gpt-5-nano...")
+        classifier = LLMQueryClassifier(model="gpt-5-nano")
         
         # Initialize Retriever
         logger.info("Initializing OptimizedRetriever...")
@@ -90,12 +89,12 @@ def initialize_chatbot_components():
             classifier=classifier
         )
         
-        # Initialize Answer Generator with gpt-4o-mini
-        logger.info("Initializing Answer Generator with gpt-4o-mini...")
+        # Initialize Answer Generator with gpt-5-nano
+        logger.info("Initializing Answer Generator with gpt-5-nano...")
         answer_generator = LLMGenerator(
-            model="gpt-4o-mini",
-            temperature=0.3,  # Balanced creativity
-            max_tokens=2000  # Long answers for complex questions
+            model="gpt-5-nano",
+            temperature=0.1,  # Balanced creativity
+            max_tokens=5000  # Long answers for complex questions
         )
         
         logger.info("✓ Chatbot components initialized successfully")
@@ -111,9 +110,9 @@ async def chat(request: ChatRequest):
     Intelligent chatbot for answering questions about Bangladesh politics.
     
     Uses:
-    - gpt-4o-mini for query classification
+    - gpt-5-nano for query classification
     - ChromaDB for vector search
-    - gpt-4o-mini for answer generation    Supports:
+    - gpt-5-nano for answer generation    Supports:
     - Simple queries: "What did BNP say about elections?"
     - Comparison: "Compare BNP and JI positions"
     - Trend analysis: "How has security situation changed?"
@@ -170,7 +169,7 @@ async def chat(request: ChatRequest):
                 sources=[],
                 total_articles_retrieved=0,
                 processing_time=time.time() - start_time,
-                model_used="gpt-4o-mini"
+                model_used="gpt-5-nano"
             )
         
         # Step 3: Prepare Context
@@ -178,7 +177,7 @@ async def chat(request: ChatRequest):
         context = prepare_context_from_articles(articles, max_tokens=6000)
         
         # Step 4: Generate Answer
-        logger.info("Step 4: Generating answer with gpt-4o-mini...")
+        logger.info("Step 4: Generating answer with gpt-5-nano...")
         answer = await generate_answer(
             query=request.query,
             context=context,
@@ -215,7 +214,7 @@ async def chat(request: ChatRequest):
             sources=sources,
             total_articles_retrieved=len(articles),
             processing_time=processing_time,
-            model_used="gpt-4o-mini"
+            model_used="gpt-5-nano"
         )
         
     except Exception as e:
@@ -323,22 +322,57 @@ async def generate_answer(
 
 Your task is to answer questions based on the provided news articles about ALL political parties and figures in Bangladesh.
 
+POLITICAL PARTIES - ABBREVIATIONS AND FULL NAMES:
+- BNP = Bangladesh Nationalist Party
+- AL = Awami League
+- JI = Jamaat-e-Islami
+- NCP = National Citizen Party
+- Gono Odhikar Parishad = GOP (গণ অধিকার পরিষদ)
+- Gono Songhati = Ganosanhati Andolan (গণসংহতি আন্দোলন)
+- AB Party = Amar Bangladesh Party (আমার বাংলাদেশ পার্টি)
+Always use full names when first mentioning a party, then you may use abbreviations.
+
+CRITICAL CONTEXT UPDATE (As of August 2024):
+- Sheikh Hasina resigned as Prime Minister in August 2024 and parliament was dissolved
+- Bangladesh is currently under an INTERIM GOVERNMENT led by Dr Muhammad Yunus (Nobel laureate)
+- Awami League (AL) is NO LONGER the ruling party - there is NO ruling party currently
+- The country is in a transitional period with the interim government overseeing the election process
+- NEVER refer to AL as the "ruling party" or "current government" in ANY response
+- If the question asks about AL as ruling party, IMMEDIATELY CORRECT this and clarify the interim government situation
+
+ABSOLUTE RULE - NEVER VIOLATE:
+🚫 NEVER say "Awami League is the ruling party" or "AL is ruling" in ANY context
+🚫 NEVER refer to AL as the current government
+🚫 Even if the QUESTION mentions AL as ruling party, YOU MUST CORRECT this in your answer
+✅ ALWAYS clarify: "Bangladesh is under interim government (since Aug 2024), not AL"
+✅ ALWAYS specify: "AL was the previous ruling party until August 2024"
+✅ If articles mention AL governance, add disclaimer: "This was before August 2024 transition"
+
+IMPORTANT: When answering questions about current political leadership or ruling party:
+- FIRST LINE: Clarify that Bangladesh is under an interim government (since August 2024)
+- Mention that AL was the previous ruling party before Sheikh Hasina's resignation
+- Do NOT say AL is currently the ruling party under ANY circumstances
+- If articles are older (before August 2024), provide historical context and MANDATORY current update
+- Treat any question mentioning "AL ruling" as outdated information that needs correction
+
 Guidelines:
 1. PRIMARY: Base your answer on the provided articles whenever possible
 2. Cite specific articles when making claims (e.g., "According to Daily Star on Oct 15...")
 3. IMPORTANT: If the specific question is not directly answered in the articles:
    - Provide general context based on what IS in the articles
    - Use your knowledge of Bangladesh politics to give a helpful answer
+   - For questions about CURRENT ruling party/government, ALWAYS start with interim government clarification
    - Clearly indicate: "While the specific details aren't in these articles, based on the political context..."
 4. For general questions (e.g., "security risks", "political reforms"):
    - Extract relevant themes and patterns from available articles
    - Synthesize information to answer the broader question
    - Don't just say "articles don't contain this" - be helpful!
-5. Be objective and balanced - present ALL parties' perspectives equally
+5. Be objective and balanced - present ALL parties' perspectives equally (but remember AL is not ruling now)
 6. For comparison questions, structure similarities and differences clearly
-7. For trend questions, show chronological progression
+7. For trend questions, show chronological progression with the August 2024 transition as a CRITICAL milestone
 8. Keep answers concise but comprehensive (2-3 paragraphs for simple queries, more for complex ones)
 9. If NO relevant articles are provided, acknowledge this and provide a brief general overview using your knowledge
+10. Use full party names when first mentioned, then abbreviations are acceptable
 """
 
     user_prompt = f"""Question: {query}
@@ -355,8 +389,8 @@ Answer:"""
     answer = answer_generator._call_llm(
         prompt=user_prompt,
         system_prompt=system_prompt,
-        temperature=0.3,
-        max_tokens=2000
+        temperature=0.1,
+        max_tokens=5000
     )
     
     return answer.strip()
@@ -379,6 +413,6 @@ async def chatbot_health():
     return {
         'status': 'ready' if all_ready else 'not_ready',
         'components': components_status,
-        'model': 'gpt-4o-mini',
+        'model': 'gpt-5-nano',
         'article_count': vector_db.collection.count() if vector_db else 0
     }

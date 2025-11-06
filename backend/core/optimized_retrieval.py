@@ -39,15 +39,15 @@ class OptimizedRetriever:
         self,
         vector_db: VectorDatabase,
         classifier: Optional[LLMQueryClassifier] = None,
-        model: str = "gpt-4o-mini"
+        model: str = "gpt-5-nano"  # Using gpt-5-nano (latest efficient model)
     ):
         """
         Initialize the optimized retriever.
         
         Args:
             vector_db: VectorDatabase instance
-            classifier: Query classifier (optional, will create with gpt-4o-mini if None)
-            model: Model to use for classification (default: gpt-4o-mini)
+            classifier: Query classifier (optional, will create with gpt-5-nano if None)
+            model: Model to use for classification (default: gpt-5-nano)
         """
         self.vector_db = vector_db
         
@@ -58,7 +58,7 @@ class OptimizedRetriever:
         
         self.classifier = classifier
         
-        logger.info("OptimizedRetriever initialized with gpt-4o-mini")
+        logger.info("OptimizedRetriever initialized with gpt-5-nano")
     
     async def retrieve_for_chatbot(
         self,
@@ -426,7 +426,7 @@ async def test_retriever():
     
     retriever = OptimizedRetriever(
         vector_db=vector_db,
-        model="gpt-4o-mini"  # Use gpt-4o-mini
+        model="gpt-5-nano"  # Use gpt-5-nano
     )
     
     # Test query

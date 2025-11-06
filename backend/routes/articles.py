@@ -267,7 +267,7 @@ async def summarize_article(article_id: str):
         logger.info(f"Detected language: {language} for article {article_id}")
         
         # Generate comprehensive summary using LLM (with retry mechanism)
-        llm = LLMGenerator(model="gpt-4o-mini")  # Using gpt-4o-mini (proven stable model)
+        llm = LLMGenerator(model="gpt-5-nano")  # Using gpt-5-nano (latest efficient model)
         
         logger.info(f"Sending summarization request to LLM for article {article_id}")
         
@@ -282,7 +282,7 @@ async def summarize_article(article_id: str):
         
         for attempt in range(max_retries):
             try:
-                logger.info(f"Attempt {attempt + 1}/{max_retries} to generate summary for article {article_id} (Language: {language}) using gpt-4o-mini")
+                logger.info(f"Attempt {attempt + 1}/{max_retries} to generate summary for article {article_id} (Language: {language}) using gpt-5-nano")
                 summary_result = llm.generate_speech_summary(
                     article_content,
                     article_title=article_metadata.get("title"),

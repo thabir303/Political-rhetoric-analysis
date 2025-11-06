@@ -161,10 +161,10 @@ async def analyze_articles_with_llm(request: LLMAnalysisRequest):
         # Initialize LLM
         try:
             llm = LLMGenerator(
-                model="gpt-4o-mini",
+                model="gpt-5-nano",
                 temperature=0.3
             )
-            logger.info("LLM Generator initialized with gpt-4o-mini")
+            logger.info("LLM Generator initialized with gpt-5-nano")
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {e}")
             raise HTTPException(

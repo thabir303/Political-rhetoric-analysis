@@ -2,7 +2,7 @@
 LLM Generation Module for Political Speech Analysis
 
 Supports multiple LLM providers:
-1. OpenAI (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo)
+1. OpenAI (gpt-5-nano, gpt-4o, gpt-4o-mini, gpt-4-turbo)
 2. Google Gemini (gemini-2.0-flash-exp, gemini-1.5-pro, etc.)
 3. Groq API with LLaMA models
 
@@ -11,6 +11,8 @@ Generates:
 2. Keywords highlighting important topics and discourse
 
 Supports both English and Bangla content.
+
+Note: Using gpt-5-nano (latest efficient model) for better performance.
 """
 
 import os
@@ -68,7 +70,7 @@ class LLMGenerator:
     
     def __init__(
         self,
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-5-nano",  # Updated to gpt-5-nano (latest efficient model)
         temperature: float = 0.3,
         max_tokens: int = 2000,
         api_key: Optional[str] = None,
@@ -79,7 +81,7 @@ class LLMGenerator:
         
         Args:
             model: Model name 
-                   - OpenAI: gpt-4o, gpt-4o-mini (default), gpt-4-turbo, gpt-3.5-turbo
+                   - OpenAI: gpt-5-nano (default), gpt-4o, gpt-4o-mini, gpt-4-turbo
                    - Gemini: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
                    - Groq: llama-3.3-70b-versatile, llama-3.1-8b-instant
             temperature: Sampling temperature (0.0-1.0, lower = more focused)
@@ -176,7 +178,7 @@ class LLMGenerator:
         """
         try:
             if self.provider == "openai":
-                # OpenAI API call
+                # OpenAI API call - GPT-5-nano uses new responses API
                 messages = []
                 
                 if system_prompt:
@@ -190,31 +192,44 @@ class LLMGenerator:
                     "content": prompt
                 })
                 
-                # Use max_completion_tokens for newer models (gpt-4o, o1, etc.)
-                # Use max_tokens for older models (gpt-3.5-turbo, gpt-4-turbo)
-                completion_params = {
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": temperature or self.temperature,
-                    "top_p": 1
-                }
-                
-                # Check if using newer models that require max_completion_tokens
-                if any(model_prefix in self.model for model_prefix in ["gpt-4o", "o1", "gpt-5"]):
-                    completion_params["max_completion_tokens"] = max_tokens or self.max_tokens
+                # Check if using gpt-5-nano (uses new responses.create API)
+                if "gpt-5" in self.model:
+                    # GPT-5-nano: Use new responses.create API
+                    # Combine system + user prompt for input
+                    full_input = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                    
+                    response = self.client.responses.create(
+                        model=self.model,
+                        input=full_input,
+                        reasoning={"effort": "low"},  # Efficient reasoning
+                        text={"verbosity": "low"}     # Concise output
+                    )
+                    
+                    generated_text = response.output_text
+                    logger.info(f"GPT-5-nano response received (length: {len(generated_text)} chars)")
+                    
                 else:
-                    completion_params["max_tokens"] = max_tokens or self.max_tokens
-                
-                response = self.client.chat.completions.create(**completion_params)
-                
-                generated_text = response.choices[0].message.content
+                    # Older models: Use chat.completions.create
+                    completion_params = {
+                        "model": self.model,
+                        "messages": messages,
+                        "temperature": temperature or self.temperature,
+                        "top_p": 1
+                    }
+                    
+                    # Check if using newer models that require max_completion_tokens
+                    if any(model_prefix in self.model for model_prefix in ["gpt-4o", "o1"]):
+                        completion_params["max_completion_tokens"] = max_tokens or self.max_tokens
+                    else:
+                        completion_params["max_tokens"] = max_tokens or self.max_tokens
+                    
+                    response = self.client.chat.completions.create(**completion_params)
+                    generated_text = response.choices[0].message.content
                 
                 # Debug log for empty responses
                 if not generated_text or len(generated_text.strip()) == 0:
                     logger.warning(f"⚠️ Empty response from {self.model}")
                     logger.warning(f"Response object: {response}")
-                    logger.warning(f"Finish reason: {response.choices[0].finish_reason}")
-                    logger.warning(f"Completion params: {completion_params}")
                 
                 generated_text = generated_text.strip() if generated_text else ""
                 logger.info(f"OpenAI response received successfully (length: {len(generated_text)} chars)")
