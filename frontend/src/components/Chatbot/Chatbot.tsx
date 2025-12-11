@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare } from 'lucide-react';
+import ChatbotIcon from '../../assets/chatbot.svg';
 import ChatHeader from './components/ChatHeader';
 import ClearChatModal from './components/ClearChatModal';
 import HistoryPanel from './components/HistoryPanel';
@@ -235,10 +235,15 @@ const Chatbot: React.FC<ChatbotProps> = ({
     return (
       <button
         onClick={() => setInternalIsOpen(true)}
-        className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 hover:from-blue-700 hover:via-blue-800 hover:to-indigo-800 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 z-50 cursor-pointer hover:scale-110 animate-bounce"
+        aria-label="Open Political Analysis AI Chat"
+        className="fixed bottom-10 right-6 w-20 h-20 rounded-full bg-gradient-to-b from-green-400 to-green-600 flex items-center justify-center transition-all duration-300 z-50 cursor-pointer hover:scale-110 animate-bounce floating-chatbot"
         title="Open Political Analysis AI Chat"
       >
-        <MessageSquare className="w-7 h-7" />
+        <img
+          src={ChatbotIcon}
+          alt="Chatbot"
+          style={{ width: '75px', height: '75px' }}
+        />
       </button>
     );
   }
@@ -306,7 +311,7 @@ const Chatbot: React.FC<ChatbotProps> = ({
 
   if (embedded) {
     return (
-      <div className="flex flex-col h-full bg-white dark:bg-gray-900 rounded-2xl border-2 border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
+      <div className="flex flex-col h-full bg-gray-900 overflow-hidden">
         {chatContent}
       </div>
     );

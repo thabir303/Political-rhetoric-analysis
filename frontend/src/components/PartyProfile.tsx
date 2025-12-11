@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import type { FigureProfileResponse } from '../types'
+import type { FigureProfileResponse, ArticleSummary } from '../types'
 import { AnalysisButton } from './AnalysisButton'
 import { formatDateToDDMMYYYY } from '../utils/dateFormat'
 import { getPeriodSummaries } from '../utils/api'
 import { getAuthHeader } from '../utils/auth'
+import Pagination from './Pagination'
 
 export default function PartyProfile() {
   const { partyName } = useParams<{ partyName: string }>()
@@ -18,6 +19,10 @@ export default function PartyProfile() {
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [isFiltering, setIsFiltering] = useState(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
   
   // Expanded articles state
   const [expandedArticles, setExpandedArticles] = useState<Set<string>>(new Set())
@@ -46,8 +51,11 @@ export default function PartyProfile() {
     last_updated?: string
   }>>([])
   const [_loadingPeriodSummaries, setLoadingPeriodSummaries] = useState(false)
+  
+  // Date range state
+  const [dateRange, setDateRange] = useState<{ earliest: string; latest: string } | null>(null)
 
-  const loadProfile = async (from?: string, to?: string) => {
+  const loadProfile = async (from?: string, to?: string, page = currentPage, items = itemsPerPage) => {
     if (!partyName) {
       setError('Missing party name')
       setLoading(false)
@@ -60,7 +68,7 @@ export default function PartyProfile() {
     try {
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
       const authHeaders = getAuthHeader()
-      const response = await fetch(`${API_BASE_URL}/parties/${encodeURIComponent(partyName)}/profile`, {
+      const response = await fetch(`${API_BASE_URL}/parties/${encodeURIComponent(partyName)}/profile?page=${page}&items_per_page=${items}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -77,7 +85,27 @@ export default function PartyProfile() {
       }
       
       const data = await response.json()
+      console.log('Full response data:', data)
+      console.log('Pagination response:', { 
+        total_articles: data.total_articles, 
+        articles_count: data.articles?.length,
+        page: data.page,
+        items_per_page: data.items_per_page,
+        total_pages: data.total_pages,
+        calculated_pages: data.total_articles && data.items_per_page ? Math.ceil(data.total_articles / data.items_per_page) : 0
+      })
       setProfile(data)
+      
+      // Compute date range from articles
+      if (data.articles && data.articles.length > 0) {
+        const dates = data.articles.map((a: ArticleSummary) => new Date(a.date).getTime()).filter((d: number) => !isNaN(d))
+        if (dates.length > 0) {
+          setDateRange({
+            earliest: new Date(Math.min(...dates)).toISOString().split('T')[0],
+            latest: new Date(Math.max(...dates)).toISOString().split('T')[0]
+          })
+        }
+      }
     } catch (err) {
       setError(`Failed to load profile: ${err}`)
       console.error('Error loading party profile:', err)
@@ -106,18 +134,34 @@ export default function PartyProfile() {
 
   useEffect(() => {
     setLoading(true)
-    loadProfile()
+    setCurrentPage(1) // Reset to page 1 when party changes
+    loadProfile(undefined, undefined, 1, 20) // Explicitly pass page 1 and 20 items
     loadPeriodSummaries()
   }, [partyName])
 
   const handleApplyFilter = () => {
-    loadProfile(dateFrom || undefined, dateTo || undefined)
+    setCurrentPage(1) // Reset to page 1 when applying filter
+    loadProfile(dateFrom || undefined, dateTo || undefined, 1, itemsPerPage)
   }
 
   const handleResetFilter = () => {
     setDateFrom('')
     setDateTo('')
-    loadProfile()
+    setCurrentPage(1) // Reset to page 1 when resetting filter
+    setItemsPerPage(20) // Reset to default 20 items per page
+    loadProfile(undefined, undefined, 1, 20)
+  }
+  
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    loadProfile(dateFrom || undefined, dateTo || undefined, page, itemsPerPage)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items)
+    setCurrentPage(1) // Reset to page 1 when changing items per page
+    loadProfile(dateFrom || undefined, dateTo || undefined, 1, items)
   }
   
   // Toggle article expansion and fetch full content if needed
@@ -219,12 +263,6 @@ export default function PartyProfile() {
   
   // Get unique topics
   const allTopics = profile ? Array.from(new Set(profile.articles.flatMap(a => a.topics))).slice(0, 10) : []
-
-  // Get date range
-  const dateRange = profile && profile.articles.length > 0 ? {
-    earliest: profile.articles[profile.articles.length - 1].date,
-    latest: profile.articles[0].date
-  } : null
 
   // Loading state
   if (loading) {
@@ -805,8 +843,13 @@ export default function PartyProfile() {
               </h2>
 
               {profile.articles.length > 0 ? (
-                <div className="space-y-4 max-h-[800px] overflow-y-auto pr-2">
-                  {profile.articles.map((article, index) => (
+                <>
+          
+                  
+                  
+                  
+                  <div className="space-y-4">
+                    {profile.articles.map((article, index) => (
                     <div
                       key={article.id || index}
                       className="border border-gray-200 rounded-lg p-5 hover:shadow-md hover:border-blue-300 transition-all"
@@ -929,7 +972,20 @@ export default function PartyProfile() {
                       </div>
                     </div>
                   ))}
-                </div>
+                  </div>
+                  
+                  {/* Pagination bottom */}
+                  {profile.total_articles && profile.total_articles > 0 && (
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={profile.total_pages || 1}
+                      totalItems={profile.total_articles}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={handlePageChange}
+                      onItemsPerPageChange={handleItemsPerPageChange}
+                    />
+                  )}
+                </>
               ) : (
                 <div className="text-center py-12">
                   <svg className="h-16 w-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

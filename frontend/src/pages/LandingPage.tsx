@@ -1,6 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { Newspaper, Users, Search, Database, MessageSquare, FileSearch, LogOut } from 'lucide-react';
+import { Newspaper, Users, Search, Database, LogOut, BarChart3 } from 'lucide-react';
+import ChatbotIcon from '../assets/chatbot.svg';
 import { logout, getEmail } from '../utils/auth';
+import logo from '../assets/logo.png'
+import { Link } from 'react-router-dom'
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -41,37 +44,49 @@ const LandingPage = () => {
       color: 'from-orange-500 to-orange-600'
     },
     {
-      icon: <MessageSquare className=" " />,
+      icon: <img src={ChatbotIcon} alt="Chatbot" style={{ width: '24px', height: '24px' }} />,
       title: 'AI Chatbot',
       description: 'Ask questions about Bangladesh politics and get AI-powered answers',
       path: '/chatbot',
       color: 'from-pink-500 to-pink-600'
+    },
+    {
+      icon: <BarChart3 className=" " />,
+      title: 'Category Analytics',
+      description: 'Explore 9 political categories with interactive graphs and insights',
+      path: '/categories',
+      color: 'from-indigo-500 to-indigo-600'
     }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 relative overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/2 -right-1/4 w-96 h-96 bg-blue-200/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-1/3 -left-1/4 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-200/20 rounded-full blur-3xl animate-pulse delay-2000"></div>
+      </div>
+
+      {/* Header with Enhanced Glassmorphism */}
+      <header className="relative z-10 backdrop-blur-md bg-white/40 border-b border-white/30 shadow-lg shadow-gray-200/30">
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="text-center flex-1">
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                Speech Analysis System
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Analyzing Bangladesh Political News & Speeches
-              </p>
+              <Link to="/" className="flex items-center ">
+                <img src={logo} alt="Speech Analysis" className="h-20 w-640px" />
+              </Link>
+              
             </div>
             
             {/* Logout Button */}
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 font-medium">
+              <span className="text-sm text-gray-800 font-semibold backdrop-blur-sm bg-white/50 px-3 py-1.5 rounded-lg border border-white/40">
                 {email}
               </span>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200 font-medium"
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl hover:scale-105"
               >
                 <LogOut size={18} />
                 Logout
@@ -82,13 +97,13 @@ const LandingPage = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+      <main className="relative max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8 z-10">
         {/* Hero Section */}
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
+        <div className="text-center mb-16 backdrop-blur-xl bg-white/50 rounded-2xl p-8 border border-white/40 shadow-xl">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 bg-clip-text text-transparent mb-4">
             Welcome to Political News Analysis Platform
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-gray-700 max-w-3xl mx-auto font-medium">
             Comprehensive tools for scraping, analyzing, and retrieving political news articles 
             from leading Bangladeshi newspapers with AI-powered insights.
           </p>
@@ -100,51 +115,26 @@ const LandingPage = () => {
             <div
               key={index}
               onClick={() => navigate(feature.path)}
-              className="bg-white rounded-xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2"
+              className="group backdrop-blur-xl bg-white/60 rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 cursor-pointer hover:scale-105 border border-white/40 hover:bg-white/70"
             >
-              <div className={`w-16 h-16 rounded-full bg-gradient-to-r ${feature.color} flex items-center justify-center mb-6`}>
+              <div className={`w-16 h-16 rounded-2xl bg-gradient-to-r ${feature.color} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
                 {feature.icon}
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
                 {feature.title}
               </h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-700 mb-6 leading-relaxed">
                 {feature.description}
               </p>
-              <button className={`px-6 py-2 cursor-pointer bg-gradient-to-r ${feature.color} text-white font-semibold rounded-lg hover:opacity-90 transition-opacity`}>
-                Get Started →
+              <button className={`px-6 py-3 cursor-pointer bg-gradient-to-r ${feature.color} text-white font-semibold rounded-xl hover:shadow-xl transition-all duration-300 hover:scale-105 inline-flex items-center gap-2`}>
+                <span>Get Started</span>
+                <span className="text-lg">→</span>
               </button>
             </div>
           ))}
         </div>
-
-        {/* Stats Section */}
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-12">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-            System Capabilities
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-blue-600 mb-2">4</div>
-              <div className="text-gray-600">News Sources</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-green-600 mb-2">7+</div>
-              <div className="text-gray-600">Political Parties</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 mb-2">AI</div>
-              <div className="text-gray-600">Powered Analysis</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-orange-600 mb-2">∞</div>
-              <div className="text-gray-600">Articles Capacity</div>
-            </div>
-          </div>
-        </div>
-
         {/* Features List */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg p-8 text-white">
+        {/* <div className="backdrop-blur-xl bg-gradient-to-r from-blue-500/90 to-purple-600/90 rounded-2xl shadow-2xl p-8 text-white border border-white/20">
           <h3 className="text-2xl font-bold mb-6 text-center">
             Key Features
           </h3>
@@ -216,41 +206,44 @@ const LandingPage = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Developer Tools Section */}
-        <div className="bg-gradient-to-r from-gray-700 to-gray-800 rounded-xl shadow-lg p-8 mb-12">
-          <h3 className="text-2xl font-bold text-white mb-6 text-center">
+        {/* <div className="backdrop-blur-2xl bg-gradient-to-r from-gray-800/50 to-gray-900/50 rounded-3xl shadow-2xl p-10 mb-12 border border-white/10">
+          <h3 className="text-2xl font-bold text-white mb-8 text-center flex items-center justify-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400/30 to-yellow-500/30 backdrop-blur-sm flex items-center justify-center">
+              <span className="text-2xl">⚙️</span>
+            </div>
             Developer Tools
           </h3>
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-6">
             <div
               onClick={() => navigate('/categorization-test')}
-              className="bg-white/10 backdrop-blur-sm rounded-lg p-6 hover:bg-white/20 transition-all cursor-pointer border border-white/20"
+              className="group backdrop-blur-xl bg-white/10 hover:bg-white/20 rounded-2xl p-8 transition-all duration-500 cursor-pointer border border-white/20 hover:border-white/40 hover:shadow-2xl hover:scale-[1.02]"
             >
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-500 flex items-center justify-center">
-                  <FileSearch className="text-white" />
+              <div className="flex items-center space-x-6">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <FileSearch className="text-white w-8 h-8" />
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-semibold text-white text-lg mb-1">Categorization Test</h4>
-                  <p className="text-gray-300 text-sm">
+                  <h4 className="font-bold text-white text-xl mb-2 group-hover:text-yellow-200 transition-colors">Categorization Test</h4>
+                  <p className="text-gray-300 text-sm leading-relaxed">
                     Validate article categorization and party-figure associations in the database
                   </p>
                 </div>
-                <div className="text-white opacity-50 text-2xl">→</div>
+                <div className="text-white/50 group-hover:text-white/90 text-3xl group-hover:translate-x-2 transition-all duration-300">→</div>
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
 
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white shadow-sm mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <p className="text-center text-gray-500 text-sm">
-            © 2025 Speech Analysis System. 
+      {/* Footer with Glass Effect */}
+      <footer className="relative backdrop-blur-md bg-white/40 shadow-lg shadow-gray-200/30 mt-12 border-t border-white/30 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <p className="text-center text-gray-700 text-sm font-medium">
+            © {new Date().getFullYear()} Speech Analysis System
           </p>
         </div>
       </footer>

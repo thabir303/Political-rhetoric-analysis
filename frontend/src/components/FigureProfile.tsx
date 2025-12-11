@@ -5,6 +5,7 @@ import type { FigureProfileResponse } from '../types'
 import { AnalysisButton } from './AnalysisButton'
 import { formatDateToDDMMYYYY } from '../utils/dateFormat'
 import { getAuthHeader } from '../utils/auth'
+import Pagination from './Pagination'
 
 export default function FigureProfile() {
   const { partyName, figureName } = useParams<{ partyName: string; figureName: string }>()
@@ -19,6 +20,10 @@ export default function FigureProfile() {
   const [dateTo, setDateTo] = useState<string>('')
   const [speechesOnly, setSpeechesOnly] = useState<boolean>(false)
   const [isFiltering, setIsFiltering] = useState(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
   
   // Expanded articles state
   const [expandedArticles, setExpandedArticles] = useState<Set<string>>(new Set())
@@ -47,6 +52,9 @@ export default function FigureProfile() {
     last_updated?: string
   }>>([])
   const [_loadingPeriodSummaries, setLoadingPeriodSummaries] = useState(false)
+  
+  // Date range state
+  const [dateRange, setDateRange] = useState<{ earliest: string; latest: string } | null>(null)
 
   // Load all period summaries for this figure
   const loadPeriodSummaries = async () => {
@@ -65,7 +73,7 @@ export default function FigureProfile() {
     }
   }
 
-  const loadProfile = async (from?: string, to?: string, speechOnly?: boolean) => {
+  const loadProfile = async (from?: string, to?: string, speechOnly?: boolean, page = currentPage, items = itemsPerPage) => {
     if (!partyName || !figureName) {
       setError('Missing party or figure name')
       setLoading(false)
@@ -76,8 +84,26 @@ export default function FigureProfile() {
     setError(null)
 
     try {
-      const response = await fetchFigureProfile(partyName, figureName, from, to, speechOnly)
+      const response = await fetchFigureProfile(partyName, figureName, from, to, speechOnly, page, items)
+      console.log('Figure pagination response:', { 
+        total_articles: response.total_articles, 
+        articles_count: response.articles?.length,
+        page: response.page,
+        items_per_page: response.items_per_page,
+        total_pages: response.total_pages 
+      })
       setProfile(response)
+      
+      // Compute date range from articles
+      if (response.articles && response.articles.length > 0) {
+        const dates = response.articles.map((a) => new Date(a.date).getTime()).filter((d) => !isNaN(d))
+        if (dates.length > 0) {
+          setDateRange({
+            earliest: new Date(Math.min(...dates)).toISOString().split('T')[0],
+            latest: new Date(Math.max(...dates)).toISOString().split('T')[0]
+          })
+        }
+      }
     } catch (err) {
       setError(`Failed to load profile: ${err}`)
       console.error('Error loading figure profile:', err)
@@ -89,19 +115,35 @@ export default function FigureProfile() {
 
   useEffect(() => {
     setLoading(true)
-    loadProfile()
+    setCurrentPage(1)
+    loadProfile(undefined, undefined, undefined, 1, 20)
     loadPeriodSummaries()
   }, [partyName, figureName])
 
   const handleApplyFilter = () => {
-    loadProfile(dateFrom || undefined, dateTo || undefined, speechesOnly)
+    setCurrentPage(1)
+    loadProfile(dateFrom || undefined, dateTo || undefined, speechesOnly, 1, itemsPerPage)
   }
 
   const handleResetFilter = () => {
     setDateFrom('')
     setDateTo('')
     setSpeechesOnly(false)
-    loadProfile()
+    setCurrentPage(1)
+    setItemsPerPage(20)
+    loadProfile(undefined, undefined, undefined, 1, 20)
+  }
+  
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    loadProfile(dateFrom || undefined, dateTo || undefined, speechesOnly, page, itemsPerPage)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items)
+    setCurrentPage(1)
+    loadProfile(dateFrom || undefined, dateTo || undefined, speechesOnly, 1, items)
   }
   
   // Toggle article expansion and fetch full content if needed
@@ -206,12 +248,6 @@ export default function FigureProfile() {
   
   // Get unique topics
   const allTopics = profile ? Array.from(new Set(profile.articles.flatMap(a => a.topics))).slice(0, 10) : []
-
-  // Get date range
-  const dateRange = profile && profile.articles.length > 0 ? {
-    earliest: profile.articles[profile.articles.length - 1].date,
-    latest: profile.articles[0].date
-  } : null
 
   // Loading state
   if (loading) {
@@ -772,8 +808,21 @@ export default function FigureProfile() {
               </h2>
 
               {profile.articles.length > 0 ? (
-                <div className="space-y-4 max-h-[800px] overflow-y-auto pr-2">
-                  {profile.articles.map((article, index) => (
+                <>
+                  {/* Pagination */}
+                  {profile.total_articles && profile.total_articles > 0 && (
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={profile.total_pages || 1}
+                      totalItems={profile.total_articles}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={handlePageChange}
+                      onItemsPerPageChange={handleItemsPerPageChange}
+                    />
+                  )}
+                  
+                  <div className="space-y-4">
+                    {profile.articles.map((article, index) => (
                     <div
                       key={article.id || index}
                       className="border border-gray-200 rounded-lg p-5 hover:shadow-md hover:border-blue-300 transition-all"
@@ -916,7 +965,20 @@ export default function FigureProfile() {
                       </div>
                     </div>
                   ))}
-                </div>
+                  </div>
+                  
+                  {/* Pagination bottom */}
+                  {profile.total_articles && profile.total_articles > 0 && (
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={profile.total_pages || 1}
+                      totalItems={profile.total_articles}
+                      itemsPerPage={itemsPerPage}
+                      onPageChange={handlePageChange}
+                      onItemsPerPageChange={handleItemsPerPageChange}
+                    />
+                  )}
+                </>
               ) : (
                 <div className="text-center py-12">
                   <svg className="h-16 w-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

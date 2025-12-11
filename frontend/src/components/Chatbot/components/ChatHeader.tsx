@@ -1,5 +1,6 @@
 import React from 'react';
-import { MessageSquare, X, Maximize2, Minimize2, Trash2, Download, History, Plus } from 'lucide-react';
+import { X, Maximize2, Minimize2, Trash2, Download, History, Plus } from 'lucide-react';
+import ChatbotIcon from '../../../assets/chatbot.svg';
 
 interface ChatHeaderProps {
   embedded?: boolean;
@@ -27,10 +28,10 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   onClose,
 }) => {
   return (
-    <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white p-5 flex items-center justify-between shadow-lg rounded-t-2xl">
+    <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white p-5 flex items-center justify-between shadow-lg">
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-md">
-          <MessageSquare className="w-7 h-7" />
+          <img src={ChatbotIcon} alt="Chatbot" style={{ width: '35px', height: '35px' }} />
         </div>
         <div>
           <h3 className="font-bold text-xl tracking-tight">Political Analysis AI</h3>

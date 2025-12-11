@@ -308,8 +308,17 @@ class NewspaperScraper:
         return list(entities.keys()) if entities else []
     
     def is_within_date_range(self, article_date: datetime) -> bool:
-        """Check if article date is within specified range."""
-        return self.start_date <= article_date <= self.end_date
+        """Check if article date is within specified range (comparing dates only, not time)."""
+        # Remove timezone info for comparison
+        if article_date.tzinfo is not None:
+            article_date = article_date.replace(tzinfo=None)
+        
+        # Compare only the date part, not the time
+        article_date_only = article_date.date()
+        start_date_only = self.start_date.date()
+        end_date_only = self.end_date.date()
+        
+        return start_date_only <= article_date_only <= end_date_only
     
     def make_request(self, url: str, max_retries: int = 3) -> Optional[requests.Response]:
         """
@@ -1094,8 +1103,11 @@ class DailyStarScraper(NewspaperScraper):
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Find article links
-            article_links = soup.find_all('a', href=re.compile(r'/.+/\d+'))
+            # Find article links - Daily Star URLs end with numeric IDs
+            # Pattern: /news/bangladesh/politics/news/article-title-1234567
+            article_links = soup.find_all('a', href=re.compile(r'/news/.+-\d+$'))
+            
+            logger.info(f"Found {len(article_links)} potential article links")
             
             for link in article_links:  # Remove 50-article limit per page
                 article_url = urljoin(self.BASE_URL, link.get('href'))
@@ -1131,16 +1143,40 @@ class DailyStarScraper(NewspaperScraper):
             title_elem = soup.find('h1')
             title = title_elem.get_text(strip=True) if title_elem else ""
             
-            # Extract date
-            date_elem = soup.find('time') or soup.find('span', class_=re.compile(r'date|publish'))
-            date_str = date_elem.get('datetime', '') if date_elem else ""
-            
+            # Extract date - try multiple approaches
             article_date = None
-            if date_str:
+            
+            # 1. Try meta tag first (most reliable)
+            meta_date = soup.find('meta', property='article:published_time')
+            if meta_date and meta_date.get('content'):
                 try:
-                    article_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    article_date = datetime.fromisoformat(meta_date['content'].replace('Z', '+00:00'))
                 except:
                     pass
+            
+            # 2. Try time tag
+            if not article_date:
+                date_elem = soup.find('time')
+                if date_elem:
+                    date_str = date_elem.get('datetime', '')
+                    if date_str:
+                        try:
+                            article_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        except:
+                            pass
+            
+            # 3. Try div with class 'date'
+            if not article_date:
+                date_div = soup.find('div', class_='date')
+                if date_div:
+                    date_text = date_div.get_text(strip=True)
+                    # Parse format like "Thu Nov 20, 2025 01:55 PM"
+                    try:
+                        # Extract just the date part before "Last update"
+                        date_text = date_text.split('Last update')[0].strip()
+                        article_date = datetime.strptime(date_text, '%a %b %d, %Y %I:%M %p')
+                    except:
+                        pass
             
             if not article_date or not self.is_within_date_range(article_date):
                 return None

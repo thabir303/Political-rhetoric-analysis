@@ -127,7 +127,9 @@ export async function fetchFigureProfile(
   figureName: string,
   dateFrom?: string,
   dateTo?: string,
-  speechesOnly?: boolean
+  speechesOnly?: boolean,
+  page: number = 1,
+  itemsPerPage: number = 20
 ): Promise<FigureProfileResponse> {
   try {
     // URL encode the parameters to handle spaces and special characters
@@ -136,22 +138,19 @@ export async function fetchFigureProfile(
     
     // Build request body
     const requestBody: {
-      query: string
+      query?: string
       date_from?: string
       date_to?: string
       speeches_only?: boolean
-      top_k: number
-    } = {
-      query: "recent statements",
-      top_k: 50
-    }
+    } = {}
     
     if (dateFrom) requestBody.date_from = dateFrom
     if (dateTo) requestBody.date_to = dateTo
     if (speechesOnly !== undefined) requestBody.speeches_only = speechesOnly
     
+    // Add pagination as query parameters
     const response = await apiClient.post<FigureProfileResponse>(
-      `/party/${encodedParty}/figure/${encodedFigure}/`,
+      `/party/${encodedParty}/figure/${encodedFigure}/?page=${page}&items_per_page=${itemsPerPage}`,
       requestBody
     )
     return response.data
@@ -572,4 +571,118 @@ export async function getPeriodSummaries(
     return handleApiError(error, `Get period summaries for ${entityName}`)
   }
 }
+
+
+// ==================== Category Functions ====================
+
+/**
+ * Get all available categories
+ */
+export async function fetchCategories() {
+  try {
+    const response = await apiClient.get('/categories')
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Fetch categories')
+  }
+}
+
+/**
+ * Analyze articles by date range and assign categories
+ */
+export async function analyzeCategories(
+  startDate: string,
+  endDate: string,
+  limit: number = 100,
+  forceReclassify: boolean = false
+) {
+  try {
+    const response = await apiClient.post('/categories/analyze', null, {
+      params: { start_date: startDate, end_date: endDate, limit, force_reclassify: forceReclassify }
+    })
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Analyze categories')
+  }
+}
+
+/**
+ * Clear all category metadata from articles
+ * Use this to remove keyword-based classifications before LLM analysis
+ */
+export async function clearCategoryMetadata() {
+  try {
+    const response = await apiClient.delete('/categories/clear-metadata')
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Clear category metadata')
+  }
+}
+
+/**
+ * Get category statistics
+ */
+export async function getCategoryStats(startDate?: string, endDate?: string) {
+  try {
+    const response = await apiClient.get('/categories/stats', {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  } catch (error) {
+    return handleApiError(error, 'Get category stats')
+  }
+}
+
+/**
+ * Get articles by category with filters
+ */
+export async function getArticlesByCategory(
+  categoryName: string,
+  party?: string,
+  startDate?: string,
+  endDate?: string,
+  source?: string,
+  page: number = 1,
+  itemsPerPage: number = 20
+) {
+  try {
+    const response = await apiClient.get(`/categories/${encodeURIComponent(categoryName)}/articles`, {
+      params: { party, start_date: startDate, end_date: endDate, source, page, items_per_page: itemsPerPage }
+    })
+    return response.data
+  } catch (error) {
+    return handleApiError(error, `Get articles for category ${categoryName}`)
+  }
+}
+
+/**
+ * Get party-wise breakdown for a category
+ */
+export async function getCategoryPartyBreakdown(
+  categoryName: string,
+  startDate?: string,
+  endDate?: string
+) {
+  try {
+    const response = await apiClient.get(`/categories/${encodeURIComponent(categoryName)}/party-breakdown`, {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  } catch (error) {
+    return handleApiError(error, `Get party breakdown for ${categoryName}`)
+  }
+}
+
+/**
+ * Get detailed statistics for a specific category
+ */
+export async function getCategoryDetailedStats(categoryName: string) {
+  try {
+    const response = await apiClient.get(`/categories/${encodeURIComponent(categoryName)}/stats`)
+    return response.data
+  } catch (error) {
+    return handleApiError(error, `Get stats for ${categoryName}`)
+  }
+}
+
 

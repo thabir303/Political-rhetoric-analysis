@@ -247,7 +247,8 @@ async def get_figure_profile(
     figure_name: str,
     date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    top_k: int = Query(10, description="Maximum results", ge=1, le=50)
+    page: int = Query(1, description="Page number", ge=1),
+    items_per_page: int = Query(20, description="Items per page (20, 50, 100, 200)")
 ):
     """
     Get articles related to a specific political figure within a party.
@@ -262,10 +263,11 @@ async def get_figure_profile(
     **Query Parameters:**
     - date_from: Start date in YYYY-MM-DD format (e.g., "2024-08-05")
     - date_to: End date in YYYY-MM-DD format (e.g., "2025-09-30")
-    - top_k: Maximum number of results (default: 10, max: 50)
+    - page: Page number (default: 1)
+    - items_per_page: Items per page - 20, 50, 100, or 200 (default: 20)
     
     Returns:
-        FigureProfileResponse with articles mentioning the figure
+        FigureProfileResponse with paginated articles mentioning the figure
     """
     try:
         from backend.core.vector_db import VectorDatabase
@@ -365,12 +367,17 @@ async def get_figure_profile(
         # Sort by date (newest first)
         matching_articles.sort(key=lambda x: (x["date_ts"], x["id"]), reverse=True)
         
-        # Limit results
-        matching_articles = matching_articles[:top_k]
+        # Calculate pagination
+        total_articles = len(matching_articles)
+        start_idx = (page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        
+        # Apply pagination
+        paginated_articles = matching_articles[start_idx:end_idx]
         
         # Convert to ArticleSummary format
         articles_list = []
-        for article in matching_articles:
+        for article in paginated_articles:
             articles_list.append(ArticleSummary(
                 id=article["id"],
                 title=article["title"],
@@ -386,9 +393,9 @@ async def get_figure_profile(
                 url=article.get("url")
             ))
         
-        # Organize by date for timeline view
+        # Organize by date for timeline view (only paginated articles)
         summaries_by_date = {}
-        for article in matching_articles:
+        for article in paginated_articles:
             date = article["date"]
             if date not in summaries_by_date:
                 summaries_by_date[date] = []
@@ -398,14 +405,17 @@ async def get_figure_profile(
                 "url": article.get("url", "")
             })
         
-        logger.info(f"Retrieved {len(articles_list)} articles for {figure_name} ({party_name})")
+        logger.info(f"Retrieved {len(articles_list)} articles (page {page}) for {figure_name} ({party_name})")
         
         return FigureProfileResponse(
             figure_name=figure_name,
             party_name=party_name,
-            total_articles=len(articles_list),
+            total_articles=total_articles,
             articles=articles_list,
-            summaries_by_date=summaries_by_date
+            summaries_by_date=summaries_by_date,
+            page=page,
+            items_per_page=items_per_page,
+            total_pages=(total_articles + items_per_page - 1) // items_per_page
         )
         
     except HTTPException:
@@ -427,7 +437,8 @@ async def get_party_profile(
     party_name: str,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    top_k: Optional[int] = Query(None, description="Maximum results (default: all)")
+    page: int = Query(1, description="Page number", ge=1),
+    items_per_page: int = Query(20, description="Items per page (20, 50, 100, 200)")
 ):
     """
     Get profile for a specific political party including all articles, figures, keywords, and topics.
@@ -438,10 +449,11 @@ async def get_party_profile(
         party_name: Name of the party (e.g., "BNP", "NCP")
         date_from: Optional start date for filtering (YYYY-MM-DD)
         date_to: Optional end date for filtering (YYYY-MM-DD)
-        top_k: Optional limit on number of articles (default: all)
+        page: Page number (default: 1)
+        items_per_page: Items per page - 20, 50, 100, or 200 (default: 20)
     
     Returns:
-        Party profile with articles, keywords, topics, and figures
+        Party profile with paginated articles, keywords, topics, and figures
     """
     try:
         from backend.core.vector_db import VectorDatabase
@@ -537,13 +549,17 @@ async def get_party_profile(
         # Sort by date (newest first)
         matching_articles.sort(key=lambda x: (x["date_ts"], x["id"]), reverse=True)
         
-        # Apply limit if specified
-        if top_k is not None and top_k > 0:
-            matching_articles = matching_articles[:min(top_k, 100)]
+        # Calculate pagination
+        total_articles = len(matching_articles)
+        start_idx = (page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        
+        # Apply pagination
+        paginated_articles = matching_articles[start_idx:end_idx]
         
         # Convert to ArticleSummary format
         articles_list = []
-        for article in matching_articles:
+        for article in paginated_articles:
             articles_list.append(ArticleSummary(
                 id=article["id"],
                 title=article["title"],
@@ -559,9 +575,9 @@ async def get_party_profile(
                 url=article.get("url")
             ))
         
-        # Organize by date for timeline view
+        # Organize by date for timeline view (only paginated articles)
         summaries_by_date = {}
-        for article in matching_articles:
+        for article in paginated_articles:
             date = article["date"]
             if date not in summaries_by_date:
                 summaries_by_date[date] = []
@@ -583,19 +599,22 @@ async def get_party_profile(
         # Get AI summary for this party
         ai_summary_data = summary_store.get_party_summary(party_name)
         
-        logger.info(f"Retrieved {len(articles_list)} articles for party {party_name}")
+        logger.info(f"Retrieved {len(articles_list)} articles (page {page}) for party {party_name}")
         
         return FigureProfileResponse(
             figure_name=full_name,  # Using party full name
             party_name=party_name,
-            total_articles=len(articles_list),
+            total_articles=total_articles,
             articles=articles_list,
             summaries_by_date=summaries_by_date,
             figures=figures_list,  # Add figures list
             ai_summary=ai_summary_data.get("summary") if ai_summary_data else None,
             ai_keywords=ai_summary_data.get("keywords", []) if ai_summary_data else [],
             ai_topics=ai_summary_data.get("topics", []) if ai_summary_data else [],
-            last_analyzed=ai_summary_data.get("last_updated") if ai_summary_data else None
+            last_analyzed=ai_summary_data.get("last_updated") if ai_summary_data else None,
+            page=page,
+            items_per_page=items_per_page,
+            total_pages=(total_articles + items_per_page - 1) // items_per_page
         )
         
     except HTTPException:

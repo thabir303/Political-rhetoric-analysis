@@ -6,12 +6,15 @@ import DatabasePage from './pages/DatabasePage'
 import ScrapingAnalysisPage from './pages/ScrapingAnalysisPage'
 import CategorizationTestPage from './pages/CategorizationTestPage'
 import ChatbotPage from './pages/ChatbotPage'
+import CategoriesPage from './pages/CategoriesPage'
+import CategoryDetailPage from './pages/CategoryDetailPage'
 import FigureProfile from './components/FigureProfile'
 import PartyProfile from './components/PartyProfile'
 import PoliticalPartyList from './components/PoliticalPartyList'
 import NewspaperScraper from './components/NewspaperScraper'
 import ProtectedRoute from './components/ProtectedRoute'
 import { Chatbot } from './components/Chatbot'
+import './styles/glassmorphism.css'
 
 function AppContent() {
   const location = useLocation();
@@ -34,6 +37,10 @@ function AppContent() {
         <Route path="/scraping-analysis" element={<ProtectedRoute><ScrapingAnalysisPage /></ProtectedRoute>} />
         <Route path="/categorization-test" element={<ProtectedRoute><CategorizationTestPage /></ProtectedRoute>} />
         <Route path="/chatbot" element={<ProtectedRoute><ChatbotPage /></ProtectedRoute>} />
+        
+        {/* Category Routes */}
+        <Route path="/categories" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
+        <Route path="/categories/:categoryName" element={<ProtectedRoute><CategoryDetailPage /></ProtectedRoute>} />
       </Routes>
       
       {/* Floating Chatbot - shows on all pages except /chatbot and /login */}

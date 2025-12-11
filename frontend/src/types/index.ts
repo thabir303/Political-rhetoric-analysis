@@ -75,6 +75,9 @@ export interface FigureProfileResponse {
   ai_keywords?: string[]  // AI-generated keywords
   ai_topics?: string[]  // AI-generated topics
   last_analyzed?: string  // Last AI analysis timestamp
+  page?: number  // Current page number
+  items_per_page?: number  // Items per page
+  total_pages?: number  // Total number of pages
 }
 
 // Legacy interface for backward compatibility

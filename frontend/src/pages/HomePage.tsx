@@ -6,6 +6,7 @@ import ResultCard from '../components/ResultCard'
 import StatsPanel from '../components/StatsPanel'
 import { searchArticles } from '../utils/api'
 import type { Article } from '../types'
+import logo from '../assets/logo.png'
 
 export default function HomePage() {
   const [query, setQuery] = useState('')
@@ -36,8 +37,8 @@ export default function HomePage() {
         <nav className="mb-8 bg-white rounded-lg shadow-md px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <Link to="/" className="text-xl font-bold text-blue-600 hover:text-blue-700">
-                Speech Analysis System
+              <Link to="/" className="flex items-center">
+                <img src={logo} alt="Speech Analysis" className="h-8 w-auto" />
               </Link>
               <Link 
                 to="/parties" 

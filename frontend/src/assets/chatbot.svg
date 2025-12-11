@@ -1,0 +1,117 @@
+<svg width="500" height="500" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <style>
+        /* Floating Animation */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+        }
+        /* Shadow Animation */
+        @keyframes shadowScale {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(0.85); opacity: 0.3; }
+        }
+        /* Gear Spin Animation */
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+        /* Eye Blink Animation */
+        @keyframes blink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            95% { transform: scaleY(0.1); }
+        }
+
+        .robot-container {
+            animation: float 4s ease-in-out infinite;
+            transform-origin: center bottom;
+        }
+        .robot-shadow {
+            animation: shadowScale 4s ease-in-out infinite;
+            transform-origin: center;
+            transform-box: fill-box;
+        }
+        .gear-icon {
+            animation: spin 10s linear infinite;
+            transform-origin: center;
+            transform-box: fill-box;
+        }
+        .robot-eye {
+            animation: blink 5s linear infinite;
+            transform-origin: center;
+            transform-box: fill-box;
+        }
+    </style>
+
+    <defs>
+        <linearGradient id="bodyGradient" x1="250" y1="100" x2="250" y2="400" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#FFFFFF" />
+            <stop offset="1" stop-color="#E3E6EE" />
+        </linearGradient>
+        
+        <linearGradient id="visorGradient" x1="250" y1="180" x2="250" y2="280" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#2C2C2C" />
+            <stop offset="1" stop-color="#111111" />
+        </linearGradient>
+
+        <filter id="eyeGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="1.5" result="blur" />
+            <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+    </defs>
+
+    <g opacity="0.8">
+        <path class="gear-icon" d="M130 120 L133 115 L138 116 L139 121 L144 123 L146 128 L143 133 L144 138 L139 140 L136 145 L131 144 L128 139 L123 138 L121 133 L124 128 L123 123 L128 121 Z M 134 130 C 134 133 131 136 128 136 C 125 136 122 133 122 130 C 122 127 125 124 128 124 C 131 124 134 127 134 130 Z" fill="#2979FF" transform="scale(1.2)"/>
+        
+        <path class="gear-icon" d="M380 240 L383 235 L388 236 L389 241 L394 243 L396 248 L393 253 L394 258 L389 260 L386 265 L381 264 L378 259 L373 258 L371 253 L374 248 L373 243 L378 241 Z M 384 250 C 384 253 381 256 378 256 C 375 256 372 253 372 250 C 372 247 375 244 378 244 C 381 244 384 247 384 250 Z" fill="#2979FF"/>
+        
+        <path d="M150 190H154V194H158V198H154V202H150V198H146V194H150V190Z" fill="#2979FF" opacity="0.6"/>
+        <path d="M360 320H364V324H368V328H364V332H360V328H356V324H360V320Z" fill="#2979FF" opacity="0.6"/>
+        <circle cx="120" cy="220" r="6" stroke="#2979FF" stroke-width="2" opacity="0.5"/>
+        <circle cx="390" cy="180" r="3" fill="#2979FF"/>
+    </g>
+
+    <ellipse class="robot-shadow" cx="250" cy="420" rx="55" ry="12" fill="#D1D5DB" opacity="0.6"/>
+
+    <g class="robot-container">
+        
+        <path d="M195 310 
+                 C 185 310, 180 350, 190 375 
+                 C 200 395, 220 400, 250 400 
+                 C 280 400, 300 395, 310 375 
+                 C 320 350, 315 310, 305 310 
+                 Z" fill="url(#bodyGradient)"/>
+        
+        <ellipse cx="250" cy="295" rx="45" ry="10" fill="#CBD5E1"/>
+
+        <path d="M175 320 C 165 320, 165 360, 170 370 C 175 380, 185 380, 185 370 C 185 340, 185 320, 175 320 Z" fill="url(#bodyGradient)"/>
+        
+        <path d="M325 320 C 335 320, 345 310, 340 280 C 338 265, 328 260, 320 265 C 315 280, 315 310, 325 320 Z" fill="url(#bodyGradient)"/>
+
+        <g>
+            <path d="M140 230 
+                     C 140 160, 190 140, 250 140 
+                     C 310 140, 360 160, 360 230 
+                     C 360 270, 330 290, 250 290 
+                     C 170 290, 140 270, 140 230 Z" 
+                     fill="url(#bodyGradient)"/>
+            
+            <circle cx="130" cy="230" r="18" fill="#E2E4EB"/>
+            <circle cx="370" cy="225" r="18" fill="#E2E4EB"/>
+            
+            <path d="M165 220 
+                     C 165 195, 295 185, 335 215 
+                     C 338 250, 310 270, 250 275 
+                     C 190 275, 165 250, 165 220 Z" 
+                     fill="url(#visorGradient)"/>
+            
+            <g class="robot-eye" fill="#2979FF" filter="url(#eyeGlow)">
+                <rect x="190" y="215" width="12" height="30" rx="6" />
+                <rect x="295" y="210" width="12" height="30" rx="6" />
+            </g>
+            
+            <path d="M180 210 Q 250 195 320 210" stroke="white" stroke-width="2" stroke-opacity="0.1" fill="none"/>
+        </g>
+    </g>
+</svg>

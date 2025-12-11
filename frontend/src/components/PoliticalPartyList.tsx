@@ -297,38 +297,6 @@ export default function PoliticalPartyList() {
           <p className="mt-2 text-gray-500">Try refreshing the page or check back later.</p>
         </div>
       )}
-
-      {/* Footer Stats */}
-      {parties.length > 0 && (
-        <div className="mt-12 bg-white rounded-2xl border-2 border-gray-100 p-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            <div>
-              <div className="text-4xl font-bold text-gray-900 mb-2">
-                {parties.length}
-              </div>
-              <div className="text-sm text-gray-500 font-medium">Political Parties</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-gray-900 mb-2">
-                {parties.reduce((sum, party) => sum + (party?.figures?.length || 0), 0)}
-              </div>
-              <div className="text-sm text-gray-500 font-medium">Key Figures</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-gray-900 mb-2">
-                {parties.reduce((sum, party) => sum + (party.article_count || 0), 0).toLocaleString()}
-              </div>
-              <div className="text-sm text-gray-500 font-medium">Total Articles</div>
-            </div>
-            <div>
-              <div className="text-4xl font-bold text-gray-900 mb-2">
-                {parties.length > 0 ? Math.round(parties.reduce((sum, party) => sum + (party.article_count || 0), 0) / parties.length).toLocaleString() : 0}
-              </div>
-              <div className="text-sm text-gray-500 font-medium">Avg. per Party</div>
-            </div>
-          </div>
-        </div>
-      )}
       </div>
     </div>
   )

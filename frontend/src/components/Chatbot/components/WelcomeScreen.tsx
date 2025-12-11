@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare } from 'lucide-react';
+import ChatbotIcon from '../../../assets/chatbot.svg';
 
 interface WelcomeScreenProps {
   onSelectExample: (example: string) => void;
@@ -24,7 +24,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectExample }) => {
   return (
     <div className="text-center text-gray-500 mt-8 px-4">
       <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-purple-600 flex items-center justify-center mx-auto mb-4 shadow-lg animate-pulse">
-        <MessageSquare className="w-10 h-10 text-white" />
+        <img src={ChatbotIcon} alt="Chatbot" style={{ width: '50px', height: '50px' }} />
       </div>
       <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
         Welcome! 👋

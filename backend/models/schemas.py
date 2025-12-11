@@ -152,6 +152,9 @@ class FigureProfileResponse(BaseModel):
     ai_keywords: List[str] = Field(default_factory=list, description="AI-generated keywords")
     ai_topics: List[str] = Field(default_factory=list, description="AI-generated topics")
     last_analyzed: Optional[str] = Field(None, description="Last AI analysis timestamp")
+    page: Optional[int] = Field(None, description="Current page number")
+    items_per_page: Optional[int] = Field(None, description="Items per page")
+    total_pages: Optional[int] = Field(None, description="Total number of pages")
 
 
 class PartyFigureQueryRequest(BaseModel):
@@ -161,4 +164,42 @@ class PartyFigureQueryRequest(BaseModel):
     date_to: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
     speeches_only: bool = Field(False, description="Filter for speeches only")
     top_k: int = Field(10, description="Maximum number of results", ge=1, le=50)
+
+
+# Category-related Models
+
+class CategoryAnalysisRequest(BaseModel):
+    """Request model for category analysis."""
+    start_date: str = Field(..., description="Start date (YYYY-MM-DD)", example="2024-10-01")
+    end_date: str = Field(..., description="End date (YYYY-MM-DD)", example="2024-10-31")
+    limit: Optional[int] = Field(100, description="Maximum articles to analyze", ge=1, le=1000)
+    force_reclassify: bool = Field(False, description="Force re-classification of already classified articles")
+
+
+class CategoryInfo(BaseModel):
+    """Model for category information."""
+    name: str = Field(..., description="Category name")
+    description: str = Field(..., description="Category description")
+    keywords: List[str] = Field(default_factory=list, description="Category keywords")
+
+
+class CategoryStatsResponse(BaseModel):
+    """Response model for category statistics."""
+    success: bool = Field(..., description="Operation success status")
+    total_articles: int = Field(0, description="Total articles")
+    categorized_articles: int = Field(0, description="Number of categorized articles")
+    uncategorized_articles: int = Field(0, description="Number of uncategorized articles")
+    category_stats: Dict[str, Any] = Field(default_factory=dict, description="Detailed stats per category")
+    top_categories: List[Dict[str, Any]] = Field(default_factory=list, description="Top categories by article count")
+
+
+class CategoryArticlesResponse(BaseModel):
+    """Response model for articles by category."""
+    success: bool = Field(..., description="Operation success status")
+    category: str = Field(..., description="Category name")
+    total_articles: int = Field(0, description="Total matching articles")
+    returned_articles: int = Field(0, description="Number of articles in this response")
+    offset: int = Field(0, description="Pagination offset")
+    limit: int = Field(50, description="Pagination limit")
+    articles: List[Dict[str, Any]] = Field(default_factory=list, description="List of articles")
 
