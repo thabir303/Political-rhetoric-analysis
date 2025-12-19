@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { Users, TrendingUp, Award, FileText } from 'lucide-react';
 import {
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Dot
+  Cell
 } from 'recharts';
 
 interface FigureData {
@@ -35,7 +33,6 @@ const InteractiveFiguresChart: React.FC<InteractiveFiguresChartProps> = ({
   const [sortBy, setSortBy] = useState<'articles' | 'name'>('articles');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [selectedFigure, setSelectedFigure] = useState<string | null>(null);
-  const [chartType, setChartType] = useState<'area' | 'line'>('area');
   const [showArticles, setShowArticles] = useState(false);
   const [loadingArticles, setLoadingArticles] = useState(false);
   const [articles, setArticles] = useState<any[]>([]);
@@ -140,25 +137,6 @@ const InteractiveFiguresChart: React.FC<InteractiveFiguresChartProps> = ({
     }
   };
 
-  // Custom dot for line chart
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload, index } = props;
-    const isSelected = selectedFigure === payload.fullName;
-    const isHovered = hoveredIndex === index;
-
-    return (
-      <Dot
-        cx={cx}
-        cy={cy}
-        r={isSelected ? 8 : isHovered ? 6 : 4}
-        fill={isSelected ? '#1e40af' : isHovered ? '#3b82f6' : categoryColor}
-        stroke="#fff"
-        strokeWidth={2}
-        style={{ cursor: 'pointer' }}
-      />
-    );
-  };
-
   return (
     <div className="bg-white rounded-2xl shadow-xl shadow-gray-300/60 p-6 border-2 border-blue-300 hover:shadow-2xl hover:border-blue-500 hover:scale-[1.02] transition-all duration-500">
       {/* Header with Stats */}
@@ -229,27 +207,6 @@ const InteractiveFiguresChart: React.FC<InteractiveFiguresChartProps> = ({
           </div>
 
           <div className="flex gap-2 items-center flex-wrap">
-            <div className="flex gap-1">
-              <button
-                onClick={() => setChartType('area')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${chartType === 'area'
-                    ? 'bg-purple-100 text-purple-700'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-              >
-                Area
-              </button>
-              <button
-                onClick={() => setChartType('line')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${chartType === 'line'
-                    ? 'bg-purple-100 text-purple-700'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-              >
-                Line
-              </button>
-            </div>
-
             <span className="text-xs text-gray-500">Sort:</span>
             <div className="flex gap-1">
               <button
@@ -275,84 +232,50 @@ const InteractiveFiguresChart: React.FC<InteractiveFiguresChartProps> = ({
         </div>
       </div>
 
-      {/* Interactive Graph Chart */}
+      {/* Interactive Bar Chart */}
       <div className="mb-3">
         <ResponsiveContainer width="100%" height={350}>
-          {chartType === 'area' ? (
-            <AreaChart
-              data={displayData}
-              margin={{ top: 10, right: 30, left: 0, bottom: 60 }}
+          <BarChart
+            data={displayData}
+            margin={{ top: 10, right: 30, left: 0, bottom: 60 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="fullName"
+              stroke="#6b7280"
+              angle={-45}
+              textAnchor="end"
+              height={80}
+              tick={{ fontSize: 10 }}
+            />
+            <YAxis
+              stroke="#6b7280"
+              tick={{ fontSize: 12 }}
+              label={{ value: 'Articles', angle: -90, position: 'insideLeft' }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar
+              dataKey="articles"
+              fill={categoryColor}
+              radius={[8, 8, 0, 0]}
+              cursor="pointer"
+              onClick={(_data: any, index: number) => handleFigureClick(displayData[index])}
+              onMouseEnter={(_data: any, index: number) => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
             >
-              <defs>
-                <linearGradient id="colorArticles" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={categoryColor} stopOpacity={0.8} />
-                  <stop offset="95%" stopColor={categoryColor} stopOpacity={0.1} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis
-                dataKey="fullName"
-                stroke="#6b7280"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                tick={{ fontSize: 10 }}
-              />
-              <YAxis
-                stroke="#6b7280"
-                tick={{ fontSize: 12 }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="articles"
-                stroke={categoryColor}
-                strokeWidth={3}
-                fillOpacity={1}
-                fill="url(#colorArticles)"
-                dot={<CustomDot />}
-                activeDot={{ r: 8, cursor: 'pointer', onClick: (_e: any, payload: any) => handleFigureClick(payload.payload) }}
-                onMouseEnter={(data: any) => {
-                  const index = displayData.findIndex((d: any) => d.fullName === data.fullName);
-                  setHoveredIndex(index);
-                }}
-                onMouseLeave={() => setHoveredIndex(null)}
-              />
-            </AreaChart>
-          ) : (
-            <LineChart
-              data={displayData}
-              margin={{ top: 10, right: 30, left: 0, bottom: 60 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis
-                dataKey="fullName"
-                stroke="#6b7280"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                tick={{ fontSize: 10 }}
-              />
-              <YAxis
-                stroke="#6b7280"
-                tick={{ fontSize: 12 }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Line
-                type="monotone"
-                dataKey="articles"
-                stroke={categoryColor}
-                strokeWidth={3}
-                dot={<CustomDot />}
-                activeDot={{ r: 8, cursor: 'pointer', onClick: (_e: any, payload: any) => handleFigureClick(payload.payload) }}
-                onMouseEnter={(data: any) => {
-                  const index = displayData.findIndex((d: any) => d.fullName === data.fullName);
-                  setHoveredIndex(index);
-                }}
-                onMouseLeave={() => setHoveredIndex(null)}
-              />
-            </LineChart>
-          )}
+              {displayData.map((entry, index) => {
+                const isSelected = selectedFigure === entry.fullName;
+                const isHovered = hoveredIndex === index;
+                return (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={isSelected ? '#1e40af' : isHovered ? '#3b82f6' : categoryColor}
+                    opacity={isSelected ? 1 : isHovered ? 0.8 : 0.7}
+                  />
+                );
+              })}
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
         {/* <p className="text-xs text-gray-500 text-center mt-2">
           💡 Click on any point to see articles mentioning that figure

@@ -49,6 +49,9 @@ const CategoryDetailPage = () => {
   const [source, setSource] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Monthly trend party filter
+  const [trendPartyFilter, setTrendPartyFilter] = useState<string>('All Parties');
+
   // Expanded articles state for "See more" feature
   const [expandedArticles, setExpandedArticles] = useState<Set<string>>(new Set());
 
@@ -258,7 +261,25 @@ const CategoryDetailPage = () => {
     articles: item.count
   })) || [];
 
-  const timeSeriesData = stats?.monthly_trend || [];
+  // Prepare monthly trend data based on selected party filter
+  const getFilteredTrendData = () => {
+    if (trendPartyFilter === 'All Parties') {
+      // Show overall category trend
+      return stats?.monthly_trend || [];
+    } else {
+      // Show party-specific trend from partyBreakdown.time_series
+      const timeSeries = partyBreakdown?.time_series || [];
+      return timeSeries.map((monthData: any) => ({
+        month: monthData.month,
+        count: monthData[trendPartyFilter] || 0
+      }));
+    }
+  };
+
+  const timeSeriesData = getFilteredTrendData();
+
+  // Get list of parties for dropdown
+  const availableParties = ['All Parties', ...(partyBreakdown?.top_parties?.map((p: any) => p.party) || [])];
 
   // Custom Tooltip with Glassmorphism
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -472,6 +493,22 @@ const CategoryDetailPage = () => {
               </div>
               <span className="bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Monthly Trend Analysis</span>
             </h3>
+            
+            {/* Party Filter Dropdown */}
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <select
+                value={trendPartyFilter}
+                onChange={(e) => setTrendPartyFilter(e.target.value)}
+                className="px-4 py-2 rounded-lg border-2 border-blue-200 bg-white/90 backdrop-blur-sm text-sm font-medium text-gray-700 hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all cursor-pointer"
+              >
+                {availableParties.map((party) => (
+                  <option key={party} value={party}>
+                    {party}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Trend Stats Summary */}
