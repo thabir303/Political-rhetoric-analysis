@@ -68,7 +68,7 @@ const CategoriesPage = () => {
     try {
       setAnalyzing(true);
       
-      const result = await analyzeCategories(startDate, endDate, 100, false);
+      const result = await analyzeCategories(startDate, endDate, undefined, false);
       
       if (result.success) {
         const message = false 

@@ -593,12 +593,16 @@ export async function fetchCategories() {
 export async function analyzeCategories(
   startDate: string,
   endDate: string,
-  limit: number = 100,
+  limit?: number,
   forceReclassify: boolean = false
 ) {
   try {
+    const params: any = { start_date: startDate, end_date: endDate, force_reclassify: forceReclassify }
+    if (limit !== undefined) {
+      params.limit = limit
+    }
     const response = await apiClient.post('/categories/analyze', null, {
-      params: { start_date: startDate, end_date: endDate, limit, force_reclassify: forceReclassify }
+      params
     })
     return response.data
   } catch (error) {

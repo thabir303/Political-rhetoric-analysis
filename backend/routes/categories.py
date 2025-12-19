@@ -155,7 +155,7 @@ async def list_categories():
 async def analyze_articles_by_date_range(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
-    limit: Optional[int] = Query(100, description="Maximum articles to analyze"),
+    limit: Optional[int] = Query(None, description="Maximum articles to analyze (optional)"),
     force_reclassify: bool = Query(False, description="Force re-classification of already classified articles")
 ):
     """
@@ -203,7 +203,7 @@ async def analyze_articles_by_date_range(
                     })
                     article_ids.append(all_data['ids'][i])
                     
-                    if len(articles_to_analyze) >= limit:
+                    if limit and len(articles_to_analyze) >= limit:
                         break
         
         if not articles_to_analyze:
