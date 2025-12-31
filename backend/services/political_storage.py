@@ -219,6 +219,7 @@ class PoliticalArticleStorage:
         for party_id, party_info in POLITICAL_STRUCTURE.items():
             score = 0
             mentioned_figures = []
+            keyword_only = True  # Track if only keywords matched (no figures)
             
             # Check party keywords
             for keyword in party_info["keywords"]:
@@ -229,18 +230,35 @@ class PoliticalArticleStorage:
             for figure in party_info["figures"]:
                 if figure.lower() in combined_text:
                     score += 5
+                    keyword_only = False  # At least one figure is mentioned
                     # Normalize figure name
                     normalized_figure = figure.split()[0]  # Take first name
                     if normalized_figure not in mentioned_figures:
                         mentioned_figures.append(figure)
             
-            if score > 0:
-                results.append({
-                    "party_id": party_id,
-                    "party_name": party_info["name"],
-                    "score": score,
-                    "mentioned_figures": mentioned_figures
-                })
+            # SPECIAL HANDLING FOR INTERIM GOVERNMENT:
+            # Only include if at least one specific figure is mentioned
+            # Just mentioning "Interim Government" or "অন্তর্বর্তী সরকার" is not enough
+            # This prevents govt-related articles without specific Interim Govt figure statements
+            # from being incorrectly categorized under Interim Government
+            if party_id == "interim_government":
+                # For Interim Government, REQUIRE at least one figure to be mentioned
+                if score > 0 and not keyword_only:  # Has figures, not just keywords
+                    results.append({
+                        "party_id": party_id,
+                        "party_name": party_info["name"],
+                        "score": score,
+                        "mentioned_figures": mentioned_figures
+                    })
+            else:
+                # For other parties, keyword OR figure mention is sufficient
+                if score > 0:
+                    results.append({
+                        "party_id": party_id,
+                        "party_name": party_info["name"],
+                        "score": score,
+                        "mentioned_figures": mentioned_figures
+                    })
         
         # Sort by score and return highest
         if results:

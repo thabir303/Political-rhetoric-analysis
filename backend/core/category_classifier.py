@@ -132,20 +132,42 @@ class CategoryClassifier:
             for i, (cat, info) in enumerate(CATEGORIES.items())
         ])
         
+        # Import POLITICAL_ENTITIES for valid parties and figures
+        from backend.core.scraping import POLITICAL_ENTITIES
+        
+        # Build valid parties and figures list
+        valid_parties = list(POLITICAL_ENTITIES.keys())
+        valid_figures = []
+        for party_data in POLITICAL_ENTITIES.values():
+            valid_figures.extend(list(party_data.get("figures", {}).keys()))
+        
+        valid_parties_str = ", ".join(valid_parties)
+        valid_figures_str = ", ".join(valid_figures)
+        
         if language == "Bangla":
             prompt = f"""You are an expert political analyst specializing in Bangladesh politics. 
 
-Classify the following {language} article into ONE or MORE of these categories ONLY if the article contains direct SPEECHES, STATEMENTS, or QUOTES from political figures or parties about these topics:
+Classify the following {language} article into ONE or MORE of these categories ONLY if the article contains direct or secondary SPEECHES, STATEMENTS, or QUOTES from political figures or parties about these topics:
 
 {categories_desc}
 
+**VALID POLITICAL PARTIES (ONLY use these exact names):**
+{valid_parties_str}
+
+**VALID POLITICAL FIGURES (ONLY use these exact canonical names):**
+{valid_figures_str}
+
 **CRITICAL CLASSIFICATION RULES:**
-1. **ONLY categorize if**: The article contains direct speeches, statements, quotes, or declarations from political parties/figures discussing the category topic
-2. **DO NOT categorize if**: The article only mentions the topic in passing, or discusses it without political party/figure involvement
-3. **Speech indicators**: Look for quotes, "বলেন", "বলেছেন", "জানান", "মন্তব্য", "বক্তব্য", "বিবৃতি", and more...
-4. An article can belong to MULTIPLE categories if political speeches cover multiple topics
-5. Choose "Others" if no clear political speech/statement about specific categories
-6. For each category, provide confidence score (0-100) and extract the relevant speech excerpt
+1. **ONLY categorize if**: The article contains direct speeches ("তিনি বলেন"/"He said") OR secondary/reported speeches ("তার মতে"/"According to him") from political parties/figures discussing the category topic
+2. **PARTY/FIGURE ASSIGNMENT**: The article should be assigned to a party/figure ONLY if that specific party's leader or figure gave the speech - NOT just because the topic relates to the party
+3. **DO NOT categorize if**: The article only mentions the topic in passing, or discusses it without any political party/figure's speech or statement
+4. **Speech indicators for DIRECT**: Look for quotes, "বলেন", "বলেছেন", "জানান", "ঘোষণা করেন", "বক্তব্য দেন" and more...
+5. **Speech indicators for SECONDARY**: Look for "তার মতে", "জানা গেছে", "সূত্রে জানা যায়", "তিনি জানিয়েছেন" and more...
+6. An article can belong to MULTIPLE categories if political speeches cover multiple topics
+7. Choose "Others" if no clear political speech/statement about specific categories
+8. For each category, provide confidence score (0-100) and extract the relevant speech excerpt
+9. **SPEAKING FIGURES**: List ONLY figures from the VALID POLITICAL FIGURES list who actually gave speeches. Use exact canonical names. Do NOT include figures who are just mentioned but did not speak. Do NOT include any figure not in the valid list.
+10. **SPEAKING PARTIES**: List ONLY parties from the VALID POLITICAL PARTIES list whose figures gave speeches. Use exact party names from the list.
 
 **Article:**
 Title: {title}
@@ -164,24 +186,36 @@ Content: {truncated_content}
     "relevant_excerpts": {{
         "Category1": "Exact quote or speech excerpt about this category",
         "Category2": "Exact quote or speech excerpt about this category"
-    }}
+    }},
+    "speaking_figures": ["Figure1", "Figure2"],
+    "speaking_parties": ["Party1", "Party2"]
 }}
 
 Respond ONLY with valid JSON, no additional text."""
         else:
             prompt = f"""You are an expert political analyst specializing in Bangladesh politics. 
 
-Classify the following English article into ONE or MORE of these categories ONLY if the article contains direct SPEECHES, STATEMENTS, or QUOTES from political figures or parties about these topics:
+Classify the following English article into ONE or MORE of these categories ONLY if the article contains direct or secondary SPEECHES, STATEMENTS, or QUOTES from political figures or parties about these topics:
 
 {categories_desc}
 
+**VALID POLITICAL PARTIES (ONLY use these exact names):**
+{valid_parties_str}
+
+**VALID POLITICAL FIGURES (ONLY use these exact canonical names):**
+{valid_figures_str}
+
 **CRITICAL CLASSIFICATION RULES:**
-1. **ONLY categorize if**: The article contains direct speeches, statements, quotes, or declarations from political parties/figures discussing the category topic
-2. **DO NOT categorize if**: The article only mentions the topic in passing, or discusses it without political party/figure involvement
-3. **Speech indicators**: Look for quotes, "said", "stated", "declared", "announced", "mentioned", etc.
-4. An article can belong to MULTIPLE categories if political speeches cover multiple topics
-5. Choose "Others" if no clear political speech/statement about specific categories
-6. For each category, provide confidence score (0-100) and extract the relevant speech excerpt
+1. **ONLY categorize if**: The article contains direct speeches ("He said"/"She stated") OR secondary/reported speeches ("According to"/"Sources said") from political parties/figures discussing the category topic
+2. **PARTY/FIGURE ASSIGNMENT**: The article should be assigned to a party/figure ONLY if that specific party's leader or figure gave the speech - NOT just because the topic relates to the party
+3. **DO NOT categorize if**: The article only mentions the topic in passing, or discusses it without any political party/figure's speech or statement
+4. **Speech indicators for DIRECT**: Look for quotes, "said", "stated", "declared", "announced", "mentioned"
+5. **Speech indicators for SECONDARY**: Look for "according to", "sources said", "reportedly stated", "it was learned"
+6. An article can belong to MULTIPLE categories if political speeches cover multiple topics
+7. Choose "Others" if no clear political speech/statement about specific categories
+8. For each category, provide confidence score (0-100) and extract the relevant speech excerpt
+9. **SPEAKING FIGURES**: List ONLY figures from the VALID POLITICAL FIGURES list who actually gave speeches. Use exact canonical names. Do NOT include figures who are just mentioned but did not speak. Do NOT include any figure not in the valid list.
+10. **SPEAKING PARTIES**: List ONLY parties from the VALID POLITICAL PARTIES list whose figures gave speeches. Use exact party names from the list.
 
 **Article:**
 Title: {title}
@@ -200,7 +234,9 @@ Content: {truncated_content}
     "relevant_excerpts": {{
         "Category1": "Exact quote or speech excerpt about this category",
         "Category2": "Exact quote or speech excerpt about this category"
-    }}
+    }},
+    "speaking_figures": ["Figure1", "Figure2"],
+    "speaking_parties": ["Party1", "Party2"]
 }}
 
 Respond ONLY with valid JSON, no additional text."""
@@ -231,12 +267,32 @@ Respond ONLY with valid JSON, no additional text."""
                     if primary not in CATEGORIES:
                         primary = valid_categories[0]
                     
+                    # Validate speaking_figures and speaking_parties against POLITICAL_ENTITIES
+                    from backend.core.scraping import POLITICAL_ENTITIES
+                    
+                    valid_parties_set = set(POLITICAL_ENTITIES.keys())
+                    valid_figures_set = set()
+                    for party_data in POLITICAL_ENTITIES.values():
+                        valid_figures_set.update(party_data.get("figures", {}).keys())
+                    
+                    # Filter to only valid figures and parties
+                    speaking_figures = [
+                        fig for fig in data.get("speaking_figures", [])
+                        if fig in valid_figures_set
+                    ]
+                    speaking_parties = [
+                        party for party in data.get("speaking_parties", [])
+                        if party in valid_parties_set
+                    ]
+                    
                     return {
                         "categories": valid_categories,
                         "primary_category": primary,
                         "confidence_scores": data.get("confidence_scores", {}),
                         "reasoning": data.get("reasoning", ""),
-                        "relevant_excerpts": data.get("relevant_excerpts", {})
+                        "relevant_excerpts": data.get("relevant_excerpts", {}),
+                        "speaking_figures": speaking_figures,
+                        "speaking_parties": speaking_parties
                     }
             
             # If parsing fails, use fallback

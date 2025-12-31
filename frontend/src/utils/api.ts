@@ -612,11 +612,14 @@ export async function analyzeCategories(
 
 /**
  * Clear all category metadata from articles
- * Use this to remove keyword-based classifications before LLM analysis
+ * Use this to remove classifications before fresh LLM analysis
+ * @param clearPeople - If true, also clears people/parties data for complete reset
  */
-export async function clearCategoryMetadata() {
+export async function clearCategoryMetadata(clearPeople: boolean = false) {
   try {
-    const response = await apiClient.delete('/categories/clear-metadata')
+    const response = await apiClient.delete('/categories/clear-metadata', {
+      params: { clear_people: clearPeople }
+    })
     return response.data
   } catch (error) {
     return handleApiError(error, 'Clear category metadata')

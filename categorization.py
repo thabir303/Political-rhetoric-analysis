@@ -281,18 +281,34 @@ class ArticleCategorizer:
         parties = []
         
         for party, data in POLITICAL_ENTITIES.items():
+            party_name_found = False
+            figure_found = False
+            
             # Check party names
             for name in data['names']:
                 if name.lower() in text_lower:
-                    parties.append(party)
+                    party_name_found = True
                     break
             
             # Check if any party figure is mentioned
-            if party not in parties:
-                for figure in data['figures']:
-                    if figure.lower() in text_lower:
-                        parties.append(party)
-                        break
+            for figure in data['figures']:
+                if figure.lower() in text_lower:
+                    figure_found = True
+                    break
+            
+            # SPECIAL HANDLING FOR INTERIM GOVERNMENT:
+            # Only include Interim Government if at least one specific figure is mentioned
+            # This prevents articles that just mention "government" or "সরকার" from being
+            # incorrectly categorized as Interim Government
+            if party == "Interim Government":
+                # For Interim Government, REQUIRE at least one figure to be mentioned
+                # Just mentioning "Interim Government" or "অন্তর্বর্তী সরকার" is not enough
+                if figure_found:
+                    parties.append(party)
+            else:
+                # For other parties, party name OR figure mention is sufficient
+                if party_name_found or figure_found:
+                    parties.append(party)
         
         return parties
     

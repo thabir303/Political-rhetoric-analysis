@@ -12,6 +12,7 @@ from backend.core.category_classifier import CategoryClassifier, get_all_categor
 from backend.database.vector_store import vector_store
 from backend.core.vector_db import VectorDatabase
 from backend.auth import require_auth
+from backend.core.name_normalizer import get_canonical_name, deduplicate_names
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ router = APIRouter(prefix="/categories", tags=["Categories"], dependencies=[Depe
     "/clear-metadata",
     summary="Clear all category metadata from articles"
 )
-async def clear_category_metadata():
+async def clear_category_metadata(clear_people: bool = Query(False, description="Also clear people/parties data")):
     """
     Remove all category-related metadata from all articles.
-    Use this to clear keyword-based classifications before running LLM-based categorization.
+    Use this to clear classifications before running fresh categorization.
     
     Removes the following fields from article metadata:
     - ai_categories
@@ -33,6 +34,11 @@ async def clear_category_metadata():
     - category_confidence
     - category_reasoning
     - categorized_at
+    
+    If clear_people=True, also clears:
+    - people
+    - parties
+    - people_affiliations
     """
     try:
         logger.info("Starting to clear category metadata from all articles")
@@ -51,56 +57,58 @@ async def clear_category_metadata():
                 "cleared_count": 0
             }
         
-        # Clear category metadata from each article
-        updated_count = 0
+        # Prepare batch updates
+        ids_to_update = []
+        metadatas_to_update = []
         
         for i, metadata in enumerate(all_data['metadatas']):
             # Check if has category metadata
-            has_categories = any(
-                key in metadata 
-                for key in ['ai_categories', 'primary_category', 'category_confidence', 
-                           'category_reasoning', 'categorized_at']
-            )
+            has_categories = metadata.get('ai_categories') or metadata.get('primary_category')
             
-            if has_categories:
-                # Check if it's a keyword-based classification
-                # Keyword-based will have "fallback" in reasoning or no reasoning at all
-                reasoning = metadata.get('category_reasoning', '')
-                is_keyword_based = (
-                    'fallback' in reasoning.lower() or 
-                    'keyword-based' in reasoning.lower() or
-                    not reasoning  # No reasoning = old keyword-based
-                )
+            # Check if has people/parties data
+            has_people_data = clear_people and (metadata.get('people') or metadata.get('parties'))
+            
+            if has_categories or has_people_data:
+                # Clear all category metadata
+                metadata['ai_categories'] = ''
+                metadata['primary_category'] = ''
+                metadata['category_confidence'] = ''
+                metadata['category_reasoning'] = ''
+                metadata['categorized_at'] = ''
                 
-                # Clear all keyword-based OR if user wants to clear ALL (for fresh start)
-                # For now, we'll clear ALL to give user a fresh start
-                should_clear = True  # Change to is_keyword_based if you want to keep LLM ones
+                # Optionally clear people/parties data as well
+                if clear_people:
+                    metadata['people'] = ''
+                    metadata['parties'] = ''
+                    metadata['people_affiliations'] = ''
                 
-                if should_clear:
-                    # ChromaDB doesn't remove fields on update, so we set them to empty strings
-                    # This way stats check will skip them (empty string = not categorized)
-                    metadata['ai_categories'] = ''
-                    metadata['primary_category'] = ''
-                    metadata['category_confidence'] = ''
-                    metadata['category_reasoning'] = ''
-                    metadata['categorized_at'] = ''
-                    
-                    # Update in database with cleared metadata
-                    db.collection.update(
-                        ids=[all_data['ids'][i]],
-                        metadatas=[metadata]
-                    )
-                    
-                    updated_count += 1
-                    
-                    if updated_count % 100 == 0:
-                        logger.info(f"Cleared {updated_count} articles...")
+                ids_to_update.append(all_data['ids'][i])
+                metadatas_to_update.append(metadata)
         
-        logger.info(f"Category metadata cleared from {updated_count} articles (ALL categorized articles)")
+        # Batch update in chunks
+        updated_count = len(ids_to_update)
+        chunk_size = 500
+        
+        for j in range(0, updated_count, chunk_size):
+            chunk_ids = ids_to_update[j:j + chunk_size]
+            chunk_metas = metadatas_to_update[j:j + chunk_size]
+            
+            try:
+                db.collection.update(
+                    ids=chunk_ids,
+                    metadatas=chunk_metas
+                )
+                logger.info(f"Cleared {min(j + chunk_size, updated_count)}/{updated_count} articles...")
+            except Exception as chunk_error:
+                logger.error(f"Error updating chunk: {chunk_error}")
+                raise
+        
+        cleared_what = "category metadata" + (" and people/parties data" if clear_people else "")
+        logger.info(f"Cleared {cleared_what} from {updated_count} articles")
         
         return {
             "success": True,
-            "message": f"Successfully cleared category metadata from {updated_count} articles",
+            "message": f"Successfully cleared {cleared_what} from {updated_count} articles",
             "total_articles": len(all_data['metadatas']),
             "cleared_count": updated_count,
             "untouched_count": len(all_data['metadatas']) - updated_count
@@ -246,6 +254,13 @@ async def analyze_articles_by_date_range(
                 if result.get('relevant_excerpts'):
                     import json
                     metadata['category_excerpts'] = json.dumps(result['relevant_excerpts'], ensure_ascii=False)
+                
+                # Store speaking figures and parties (ONLY those who gave speeches)
+                # This overrides the simple name-matching from scraping
+                if result.get('speaking_figures'):
+                    metadata['people'] = ', '.join(result['speaking_figures'])
+                if result.get('speaking_parties'):
+                    metadata['parties'] = ', '.join(result['speaking_parties'])
                 
                 # Update in database
                 db.collection.update(
@@ -725,13 +740,15 @@ async def get_category_detailed_stats(category_name: str):
                     if party:
                         party_counts[party] += 1
             
-            # People
+            # People - normalize names to canonical English form
             people_str = meta.get('people', '')
             if people_str:
                 for person in people_str.split(','):
                     person = person.strip()
                     if person:
-                        people_counts[person] += 1
+                        # Normalize to canonical name (e.g., "তারেক রহমান" -> "Tareq Rahman")
+                        canonical_name = get_canonical_name(person)
+                        people_counts[canonical_name] += 1
             
             # Sources
             source = meta.get('source', '')
@@ -769,6 +786,10 @@ async def get_category_detailed_stats(category_name: str):
             "top_people": [
                 {"name": person, "count": count}
                 for person, count in people_counts.most_common(10)
+            ],
+            "all_people": [
+                {"name": person, "count": count}
+                for person, count in people_counts.most_common()
             ],
             "sources": dict(source_counts),
             "monthly_trend": [

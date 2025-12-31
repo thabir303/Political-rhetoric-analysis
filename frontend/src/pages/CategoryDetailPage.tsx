@@ -254,8 +254,8 @@ const CategoryDetailPage = () => {
     color: getPartyColor(item.party)
   })) || [];
 
-  // Show ALL figures, not just top 10
-  const allFiguresData = stats?.top_people?.map((item: any) => ({
+  // Show ALL figures - use all_people if available, fallback to top_people
+  const allFiguresData = (stats?.all_people || stats?.top_people)?.map((item: any) => ({
     name: item.name.length > 25 ? item.name.substring(0, 25) + '...' : item.name,
     fullName: item.name,
     articles: item.count
@@ -761,14 +761,10 @@ const CategoryDetailPage = () => {
                   {/* Article content with See more feature */}
                   <div className="mb-3">
                     <div className={`text-sm text-gray-600 leading-relaxed ${expandedArticles.has(article.id) ? '' : 'line-clamp-3'}`}>
-                      {expandedArticles.has(article.id) ? (
-                        <span>{article.content}</span>
-                      ) : (
-                        <HighlightedText
-                          text={article.content}
-                          highlight={(typeof article.relevant_excerpt === 'string' ? article.relevant_excerpt : '') || ''}
-                        />
-                      )}
+                      <HighlightedText
+                        text={article.content}
+                        highlight={(typeof article.relevant_excerpt === 'string' ? article.relevant_excerpt : '') || ''}
+                      />
                     </div>
                     {article.content && article.content.length > 150 && (
                       <button

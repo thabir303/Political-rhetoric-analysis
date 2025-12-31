@@ -234,9 +234,19 @@ class ArticleCategorizer:
                             figures_found.append(canonical_name)
                         break
             
-            # Add to result if party or any figure is mentioned
-            if party_mentioned or figures_found:
-                result[party_key] = figures_found
+            # SPECIAL HANDLING FOR INTERIM GOVERNMENT:
+            # Only include Interim Government if at least one specific figure is mentioned
+            # This prevents articles that just mention "government" or "সরকার" from being
+            # incorrectly categorized as Interim Government
+            if party_key == "Interim Government":
+                # For Interim Government, REQUIRE at least one figure to be mentioned
+                # Just mentioning "Interim Government" or "অন্তর্বর্তী সরকার" is not enough
+                if figures_found:
+                    result[party_key] = figures_found
+            else:
+                # For other parties, party name OR figure mention is sufficient
+                if party_mentioned or figures_found:
+                    result[party_key] = figures_found
         
         return result
     

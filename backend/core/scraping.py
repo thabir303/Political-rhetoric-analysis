@@ -32,7 +32,8 @@ POLITICAL_ENTITIES = {
             "Tareq Rahman": [
                 "Tareq Rahman", "Tarique Rahman", "Tarek Rahman", 
                 "BNP Acting Chairman", "BNP leader Tarique", "তারেক রহমান",
-                "বিএনপি ভারপ্রাপ্ত চেয়ারম্যান তারেক", "তারিক রহমান"
+                "বিএনপি ভারপ্রাপ্ত চেয়ারম্যান তারেক", "তারিক রহমান",
+                "বিএনপি ভারপ্রাপ্ত চেয়ারম্যান", "তারেক"
             ],
             "Mirza Fakhrul": [
                 "Mirza Fakhrul Islam Alamgir", "Mirza Fakhrul", 
@@ -151,7 +152,7 @@ POLITICAL_ENTITIES = {
         "figures": {
             "Dr Yunus": [
                 "Dr Muhammad Yunus", "Prof. Muhammad Yunus", "Dr M. Yunus",
-                "Chief Adviser Yunus", "Professor Yunus",
+                "Chief Adviser Yunus", "Professor Yunus", "Dr Yunus", "Dr. Yunus",
                 "ড. মুহাম্মদ ইউনূস", "ড ইউনূস", "ড. ইউনুস", "মুহাম্মদ ইউনূস"
             ],
             "Shafiqul Alam": [
@@ -284,12 +285,25 @@ class NewspaperScraper:
                             figures_found.append(figure_canonical)
                         break
             
-            # Add to result if party or any figure is mentioned
-            if party_mentioned or figures_found:
-                result[party_key] = {
-                    "party_mentioned": party_mentioned,
-                    "figures": figures_found
-                }
+            # SPECIAL HANDLING FOR INTERIM GOVERNMENT:
+            # Only include Interim Government if at least one specific figure is mentioned
+            # This prevents articles that just mention "government" or "সরকার" from being
+            # incorrectly categorized as Interim Government
+            if party_key == "Interim Government":
+                # For Interim Government, REQUIRE at least one figure to be mentioned
+                # Just mentioning "Interim Government" or "অন্তর্বর্তী সরকার" is not enough
+                if figures_found:
+                    result[party_key] = {
+                        "party_mentioned": party_mentioned,
+                        "figures": figures_found
+                    }
+            else:
+                # For other parties, party name OR figure mention is sufficient
+                if party_mentioned or figures_found:
+                    result[party_key] = {
+                        "party_mentioned": party_mentioned,
+                        "figures": figures_found
+                    }
         
         return result
     

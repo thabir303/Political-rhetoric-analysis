@@ -7,71 +7,195 @@ Handles matching between Bengali and English names for political figures.
 import re
 from typing import List, Dict, Set
 
-# Name mapping for political figures (Bengali -> English)
+# Name mapping for political figures (All variants -> Canonical English name)
+# Based on POLITICAL_ENTITIES in scraping.py - the key in figures dict is the canonical name
 NAME_MAPPING = {
-    # BNP
+    # ===================== BNP =====================
+    # Tareq Rahman variants
     'তারেক রহমান': 'Tareq Rahman',
     'তারেক': 'Tareq Rahman',
+    'তারিক রহমান': 'Tareq Rahman',
+    'বিএনপি ভারপ্রাপ্ত চেয়ারম্যান তারেক': 'Tareq Rahman',
+    'বিএনপি ভারপ্রাপ্ত চেয়ারম্যান': 'Tareq Rahman',
+    'BNP Acting Chairman': 'Tareq Rahman',
+    'BNP leader Tarique': 'Tareq Rahman',
+    'Tarique Rahman': 'Tareq Rahman',
+    'Tarek Rahman': 'Tareq Rahman',
+    
+    # Mirza Fakhrul variants
     'মির্জা ফখরুল': 'Mirza Fakhrul',
     'মির্জা ফখরুল ইসলাম আলমগীর': 'Mirza Fakhrul',
     'ফখরুল': 'Mirza Fakhrul',
+    'Mirza Fakhrul Islam Alamgir': 'Mirza Fakhrul',
+    'BNP Secretary General Fakhrul': 'Mirza Fakhrul',
+    'Mr Fakhrul Islam Alamgir': 'Mirza Fakhrul',
+    
+    # Salahuddin Ahmed variants
     'সালাহউদ্দিন আহমেদ': 'Salahuddin Ahmed',
     'সালাউদ্দিন আহমেদ': 'Salahuddin Ahmed',
     'সালাহউদ্দিন': 'Salahuddin Ahmed',
+    'বিএনপি নেতা সালাহউদ্দিন': 'Salahuddin Ahmed',
+    'Salah Uddin Ahmed': 'Salahuddin Ahmed',
+    'Salahuddin Ahmad': 'Salahuddin Ahmed',
+    'BNP leader Salahuddin': 'Salahuddin Ahmed',
     
-    # JI (Jamaat-e-Islami)
+    # ===================== JI (Jamaat-e-Islami) =====================
+    # Shafiqur Rahman variants
     'শফিকুর রহমান': 'Shafiqur Rahman',
+    'জামায়াত আমীর শফিকুর রহমান': 'Shafiqur Rahman',
+    'Dr Shafiqur Rahman': 'Shafiqur Rahman',
+    'Ameer Shafiqur Rahman': 'Shafiqur Rahman',
+    
+    # Abu Taher variants
     'আবু তাহের': 'Abu Taher',
+    'মাওলানা তাহের': 'Abu Taher',
+    'মাও. তাহের': 'Abu Taher',
+    'Syed Abdullah Muhammad Taher': 'Abu Taher',
+    'Maulana Abu Taher': 'Abu Taher',
+    
+    # Golam Parwar variants
     'গোলাম পারওয়ার': 'Golam Parwar',
+    'মিয়া গোলাম পারওয়ার': 'Golam Parwar',
+    'জামায়াত নেতা পারওয়ার': 'Golam Parwar',
+    'Mia Golam Parwar': 'Golam Parwar',
+    'Mia Ghulam Parwar': 'Golam Parwar',
     
-    # NCP (National Citizens' Committee)
+    # ===================== NCP (National Citizens Party) =====================
+    # Nahid Islam variants
     'নাহিদ ইসলাম': 'Nahid Islam',
-    'সারজিস আলম': 'Sarjis Alam',
-    'হাসনাত আবদুল্লাহ': 'Hasnat Abdullah',
-    'নাসিরউদ্দিন পাটওয়ারী': 'Nasiruddin Patwary',
-    'আখতার হোসেন': 'Akhter Hossain',
-    'তাসনিম জারা': 'Tasnim Zara',
+    'মো. নাহিদ ইসলাম': 'Nahid Islam',
+    'Md Nahid Islam': 'Nahid Islam',
+    'Convener Nahid Islam': 'Nahid Islam',
+    'Student Leader Nahid': 'Nahid Islam',
     
-    # AB Party
+    # Sarjis Alam variants
+    'সরজিস আলম': 'Sarjis Alam',
+    'সারজিস আলম': 'Sarjis Alam',
+    'Sarjis Alom': 'Sarjis Alam',
+    'Chief Coordinator Sarjis': 'Sarjis Alam',
+    
+    # Hasnat Abdullah variants
+    'হাসনাত আবদুল্লাহ': 'Hasnat Abdullah',
+    'নাগরিক পার্টির হাসনাত আবদুল্লাহ': 'Hasnat Abdullah',
+    'Hasnath Abdullah': 'Hasnat Abdullah',
+    
+    # Nasiruddin Patwary variants
+    'নাসিরউদ্দিন পাটোয়ারী': 'Nasiruddin Patwary',
+    'নাসিরউদ্দিন পাটওয়ারী': 'Nasiruddin Patwary',
+    'Nasir Uddin Patwary': 'Nasiruddin Patwary',
+    
+    # Akhter Hossain variants
+    'আখতার হোসেন': 'Akhter Hossain',
+    'Akhtar Hossain': 'Akhter Hossain',
+    'Akhtar Hossen': 'Akhter Hossain',
+    
+    # Tasnim Zara variants
+    'তাসনিম জারা': 'Tasnim Zara',
+    'Tasnim Jara': 'Tasnim Zara',
+    
+    # ===================== AB Party =====================
+    # Barrister Fuad variants
     'ব্যারিস্টার ফুয়াদ': 'Barrister Fuad',
     'ফুয়াদ': 'Barrister Fuad',
+    'এবি পার্টির ফুয়াদ': 'Barrister Fuad',
+    'Barrister Asaduzzaman Fuad': 'Barrister Fuad',
+    'Asaduzzaman Fuad': 'Barrister Fuad',
     
-    # GOP (Gono Odhikar Parishad)
+    # ===================== GOP (Gono Odhikar Parishad) =====================
+    # Nurul Haque variants
     'নুরুল হক': 'Nurul Haque',
+    'নুরুল হক নুর': 'Nurul Haque',
+    'নূর': 'Nurul Haque',
+    'গণ অধিকার পরিষদের নুর': 'Nurul Haque',
+    'Nurul Haque Nur': 'Nurul Haque',
+    'Nur Chowdhury': 'Nurul Haque',
+    
+    # Rashed variants
     'রাশেদ': 'Rashed',
     'রাশেদ খান': 'Rashed',
+    'Rashed Khan': 'Rashed',
     
-    # Gono Songhati
-    'জনায়েদ সাকী': 'Jonayed Saki',
+    # ===================== Gono Songhati =====================
+    # Jonayed Saki variants
+    'জোনায়েদ সাকী': 'Jonayed Saki',
+    'জনায়েদ সাকি': 'Jonayed Saki',
+    'গণসংহতি নেতা সাকি': 'Jonayed Saki',
+    'Zonayed Saki': 'Jonayed Saki',
     
-    # Interim Government - Advisory Board
+    # ===================== Interim Government =====================
+    # Dr Yunus variants
     'ড. ইউনূস': 'Dr Yunus',
+    'ড ইউনূস': 'Dr Yunus',
+    'ড. ইউনুস': 'Dr Yunus',
     'মুহাম্মদ ইউনূস': 'Dr Yunus',
+    'ড. মুহাম্মদ ইউনূস': 'Dr Yunus',
     'ডক্টর মুহাম্মদ ইউনূস': 'Dr Yunus',
+    'Dr Muhammad Yunus': 'Dr Yunus',
+    'Prof. Muhammad Yunus': 'Dr Yunus',
+    'Dr M. Yunus': 'Dr Yunus',
+    'Chief Adviser Yunus': 'Dr Yunus',
+    'Professor Yunus': 'Dr Yunus',
+    'Dr. Yunus': 'Dr Yunus',
+    
+    # Shafiqul Alam variants
     'শফিকুল আলম': 'Shafiqul Alam',
+    'ড. শফিকুল আলম': 'Shafiqul Alam',
+    
+    # Mahfuz Alam variants
     'মাহফুজ আলম': 'Mahfuz Alam',
+    
+    # Asif Nazrul variants
     'আসিফ নজরুল': 'Asif Nazrul',
+    'Dr Asif Nazrul': 'Asif Nazrul',
+    'Professor Asif Nazrul': 'Asif Nazrul',
+    
+    # Rizwana Hasan variants
     'রিজওয়ানা হাসান': 'Rizwana Hasan',
-    'লেফটেন্যান্ট জেনারেল জাহাঙ্গীর আলম চৌধুরী': 'Lt Gen Jahangir Alam Chowdhury',
+    'এডভোকেট রিজওয়ানা হাসান': 'Rizwana Hasan',
+    
+    # Lt Gen Jahangir Alam Chowdhury variants
     'জাহাঙ্গীর আলম চৌধুরী': 'Lt Gen Jahangir Alam Chowdhury',
+    'লেফটেন্যান্ট জেনারেল জাহাঙ্গীর': 'Lt Gen Jahangir Alam Chowdhury',
+    'লেফটেন্যান্ট জেনারেল জাহাঙ্গীর আলম চৌধুরী': 'Lt Gen Jahangir Alam Chowdhury',
+    'Lt. Gen. Jahangir Alam Chowdhury': 'Lt Gen Jahangir Alam Chowdhury',
     
-    # Interim Government - Consensus Commission
+    # Ali Riaz variants
     'আলী রিয়াজ': 'Ali Riaz',
+    'Dr Ali Riaz': 'Ali Riaz',
+    'Professor Ali Riaz': 'Ali Riaz',
+    
+    # Badiul Alam Majumder variants
     'বদিউল আলম মজুমদার': 'Badiul Alam Majumder',
+    'Dr Badiul Alam Majumder': 'Badiul Alam Majumder',
     
-    # Interim Government - Election Commission  
-    'এএমএম নাসির উদ্দিন': 'CEC AMM Nasir Uddin',
+    # CEC AMM Nasir Uddin variants
     'নাসির উদ্দিন': 'CEC AMM Nasir Uddin',
+    'এএমএম নাসির উদ্দিন': 'CEC AMM Nasir Uddin',
+    'AMM Nasir Uddin': 'CEC AMM Nasir Uddin',
+    'Nasir Uddin': 'CEC AMM Nasir Uddin',
     
-    # Interim Government - Security Forces
-    'জেনারেল ওয়াকার উজ জামান': 'Army Chief General Waqar Uz Zaman',
+    # Army Chief General Waqar Uz Zaman variants
     'ওয়াকার উজ জামান': 'Army Chief General Waqar Uz Zaman',
-    'বাহারুল আলম': 'IGP Baharul Alam',
-    'সাজ্জাত আলী': 'DMP Commissioner Sajjat Ali',
+    'জেনারেল ওয়াকার': 'Army Chief General Waqar Uz Zaman',
+    'জেনারেল ওয়াকার উজ জামান': 'Army Chief General Waqar Uz Zaman',
+    'General Waqar Uz Zaman': 'Army Chief General Waqar Uz Zaman',
+    'Army Chief Waqar': 'Army Chief General Waqar Uz Zaman',
     
-    # Interim Government - Civil Society
+    # IGP Baharul Alam variants
+    'বাহারুল আলম': 'IGP Baharul Alam',
+    'Baharul Alam': 'IGP Baharul Alam',
+    
+    # DMP Commissioner Sajjat Ali variants
+    'সাজ্জাত আলী': 'DMP Commissioner Sajjat Ali',
+    'Sajjat Ali': 'DMP Commissioner Sajjat Ali',
+    
+    # Mahfuz Anam variants
     'মাহফুজ আনাম': 'Mahfuz Anam',
-    'মাহমুদুর রহমান': 'Mahmudur Rahman'
+    'Editor Mahfuz Anam': 'Mahfuz Anam',
+    
+    # Mahmudur Rahman variants
+    'মাহমুদুর রহমান': 'Mahmudur Rahman',
+    'Editor Mahmudur Rahman': 'Mahmudur Rahman'
 }
 
 # Reverse mapping (English -> Bengali)

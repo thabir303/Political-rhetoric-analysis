@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BarChart3, TrendingUp, Users, FileText, Loader2, Calendar } from 'lucide-react';
+import { ArrowLeft, BarChart3, TrendingUp, Users, FileText, Loader2, Calendar, Trash2, X } from 'lucide-react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { fetchCategories, getCategoryStats, analyzeCategories } from '../utils/api';
+import { fetchCategories, getCategoryStats, analyzeCategories, clearCategoryMetadata } from '../utils/api';
 import { getCategoryColor, getLightColor } from '../utils/partyColors';
 
 interface CategoryInfo {
@@ -28,6 +28,9 @@ const CategoriesPage = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [totalArticles, setTotalArticles] = useState(0);
   const [categorizedArticles, setCategorizedArticles] = useState(0);
+  const [clearing, setClearing] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearPeopleData, setClearPeopleData] = useState(true);
   
   // Date range for analysis
   const [startDate, setStartDate] = useState('2024-10-01');
@@ -98,36 +101,39 @@ const CategoriesPage = () => {
     }
   };
 
-  // const handleClearMetadata = async () => {
-  //   try {
-  //     setClearing(true);
-  //     setShowClearModal(false);
+  const handleClearMetadata = async () => {
+    try {
+      setClearing(true);
+      setShowClearModal(false);
       
-  //     const result = await clearCategoryMetadata();
+      const result = await clearCategoryMetadata(clearPeopleData);
       
-  //     if (result.success) {
-  //       toast.success(`🗑️ Successfully cleared ${result.cleared_count} categorized articles!`, {
-  //         position: "top-right",
-  //         autoClose: 5000,
-  //         hideProgressBar: false,
-  //         closeOnClick: true,
-  //         pauseOnHover: true,
-  //         draggable: true,
-  //       });
-  //       // Reload stats
-  //       await loadData();
-  //     }
+      if (result.success) {
+        const message = clearPeopleData 
+          ? `🗑️ Successfully cleared ${result.cleared_count} articles (categories + people/parties data)!`
+          : `🗑️ Successfully cleared category metadata from ${result.cleared_count} articles!`;
+        toast.success(message, {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        // Reload stats
+        await loadData();
+      }
       
-  //   } catch (error: any) {
-  //     console.error('Error clearing metadata:', error);
-  //     toast.error('❌ Failed to clear metadata: ' + (error.message || 'Unknown error'), {
-  //       position: "top-right",
-  //       autoClose: 5000,
-  //     });
-  //   } finally {
-  //     setClearing(false);
-  //   }
-  // };
+    } catch (error: any) {
+      console.error('Error clearing metadata:', error);
+      toast.error('❌ Failed to clear metadata: ' + (error.message || 'Unknown error'), {
+        position: "top-right",
+        autoClose: 5000,
+      });
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const getCategoryIcon = (categoryName: string) => {
     const icons: Record<string, React.ReactElement> = {
@@ -172,7 +178,7 @@ const CategoriesPage = () => {
       <ToastContainer />
 
       {/* Confirmation Modal with Advanced Glassmorphism */}
-      {/* {showClearModal && (
+      {showClearModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
           <div className="backdrop-blur-2xl bg-white/95 rounded-3xl shadow-2xl p-10 max-w-md w-full mx-4 border-2 border-white/50 animate-in zoom-in duration-300">
             <div className="flex items-center justify-between mb-6">
@@ -180,25 +186,38 @@ const CategoriesPage = () => {
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
                   <Trash2 className="w-6 h-6 text-red-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900">Clear All Categories</h3>
+                <h3 className="text-2xl font-bold text-gray-900">Reset Category Data</h3>
               </div>
               <button
                 onClick={() => setShowClearModal(false)}
-                className="w-10 h-10 rounded-xl backdrop-blur-sm bg-white/50 hover:bg-white/80 flex items-center justify-center transition-all duration-200 border border-white/60 hover:scale-110"
+                className="w-10 h-10 rounded-xl backdrop-blur-sm bg-white/50 hover:bg-white/80 flex items-center justify-center transition-all duration-200 border border-white/60 hover:scale-110 cursor-pointer"
               >
                 <X className="w-5 h-5 text-gray-700" />
               </button>
             </div>
             
-            <div className="mb-8">
+            <div className="mb-6">
               <p className="text-gray-800 mb-4 text-base leading-relaxed">
-                Are you sure you want to clear all existing category metadata?
+                This will clear all existing category analysis data so you can run fresh categorization.
               </p>
-              <div className="backdrop-blur-sm bg-blue-50/80 rounded-2xl p-4 mb-3 border border-blue-200/50">
-                <p className="text-sm text-blue-900 font-medium">
-                  This will remove <strong>all keyword-based classifications</strong> from {categorizedArticles} articles.
-                </p>
-              </div>
+              
+              <label className="flex items-center gap-3 cursor-pointer group mb-4 p-3 rounded-xl bg-blue-50/80 border border-blue-200/50">
+                <input
+                  type="checkbox"
+                  checked={clearPeopleData}
+                  onChange={(e) => setClearPeopleData(e.target.checked)}
+                  className="w-5 h-5 text-blue-500 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                    Also clear People & Parties data
+                  </span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Recommended to fix name inconsistencies (e.g., "Tareq Rahman" vs "তারেক রহমান")
+                  </p>
+                </div>
+              </label>
+              
               <div className="backdrop-blur-sm bg-red-50/80 rounded-2xl p-4 border border-red-200/50">
                 <p className="text-sm text-red-700 font-bold flex items-center gap-2">
                   <span className="text-lg">⚠️</span>
@@ -210,21 +229,21 @@ const CategoriesPage = () => {
             <div className="flex gap-4">
               <button
                 onClick={() => setShowClearModal(false)}
-                className="flex-1 px-6 py-3 backdrop-blur-sm bg-white/70 hover:bg-white/90 text-gray-800 rounded-xl font-semibold transition-all duration-300 border border-white/60 hover:scale-105 hover:shadow-lg"
+                className="flex-1 px-6 py-3 backdrop-blur-sm bg-white/70 hover:bg-white/90 text-gray-800 rounded-xl font-semibold transition-all duration-300 border border-white/60 hover:scale-105 hover:shadow-lg cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleClearMetadata}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 hover:scale-105 hover:shadow-xl shadow-lg"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 hover:scale-105 hover:shadow-xl shadow-lg cursor-pointer"
               >
                 <Trash2 className="w-5 h-5" />
-                Clear All
+                Reset Data
               </button>
             </div>
           </div>
         </div>
-      )} */}
+      )}
 
       {/* Header with Enhanced Glassmorphism */}
       <header className="sticky top-0 z-40 backdrop-blur-md bg-white/40 border-b border-white/30 shadow-lg shadow-gray-200/30">
@@ -366,18 +385,18 @@ const CategoriesPage = () => {
           </div> */}
 
           {/* Clear Metadata Button */}
-          {/* <div className="pt-4 border-t border-gray-200">
+          <div className="pt-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-700">Clear Existing Categories</p>
+                <p className="text-sm font-medium text-gray-700">Reset Category Data</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Remove all keyword-based category metadata to start fresh with LLM classification
+                  Clear all existing category and people data to fix inconsistencies and start fresh
                 </p>
               </div>
               <button
                 onClick={() => setShowClearModal(true)}
                 disabled={clearing}
-                className="px-6 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-6 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center gap-2 cursor-pointer"
               >
                 {clearing ? (
                   <>
@@ -385,14 +404,14 @@ const CategoriesPage = () => {
                     Clearing...
                   </>
                 ) : (
-                  <div className="flex items-center gap-2 cursor-pointer">
-                    <Trash2 className="w-5 h-5 cursor-pointer" />
-                    Clear All Categories
-                  </div>
+                  <>
+                    <Trash2 className="w-5 h-5" />
+                    Reset All Data
+                  </>
                 )}
               </button>
             </div>
-          </div> */}
+          </div>
         </div>
 
         {/* Categories Grid */}
