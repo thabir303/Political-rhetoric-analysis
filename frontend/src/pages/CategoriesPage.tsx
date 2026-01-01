@@ -28,7 +28,7 @@ const CategoriesPage = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [totalArticles, setTotalArticles] = useState(0);
   const [categorizedArticles, setCategorizedArticles] = useState(0);
-  const [clearing, setClearing] = useState(false);
+  const [_clearing, setClearing] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
   const [clearPeopleData, setClearPeopleData] = useState(true);
   
@@ -385,7 +385,7 @@ const CategoriesPage = () => {
           </div> */}
 
           {/* Clear Metadata Button */}
-          <div className="pt-4 border-t border-gray-200">
+          {/* <div className="pt-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-700">Reset Category Data</p>
@@ -411,7 +411,7 @@ const CategoriesPage = () => {
                 )}
               </button>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Categories Grid */}
