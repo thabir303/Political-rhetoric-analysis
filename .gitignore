@@ -40,7 +40,7 @@ demo_*.py
 *.swp
 *.swo
 *~
-
+*.sh
 # OS
 .DS_Store
 Thumbs.db
